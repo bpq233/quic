@@ -90,6 +90,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/event/quic/ngx_event_quic_ack.h \
 	src/event/quic/ngx_event_quic_output.h \
 	src/event/quic/ngx_event_quic_socket.h \
+	src/event/quic/bbr.h \
 	src/core/ngx_regex.h \
 	objs/ngx_auto_config.h
 
@@ -210,6 +211,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_ack.o \
 	objs/src/event/quic/ngx_event_quic_output.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
+	objs/src/event/quic/bbr.o \
 	objs/src/core/ngx_regex.o \
 	objs/src/http/ngx_http.o \
 	objs/src/http/ngx_http_core_module.o \
@@ -357,6 +359,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_ack.o \
 	objs/src/event/quic/ngx_event_quic_output.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
+	objs/src/event/quic/bbr.o \
 	objs/src/core/ngx_regex.o \
 	objs/src/http/ngx_http.o \
 	objs/src/http/ngx_http_core_module.o \
@@ -1000,6 +1003,13 @@ objs/src/event/quic/ngx_event_quic_socket.o:	$(CORE_DEPS) \
 	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/event/quic/ngx_event_quic_socket.o \
 		src/event/quic/ngx_event_quic_socket.c
+
+
+objs/src/event/quic/bbr.o:	$(CORE_DEPS) \
+	src/event/quic/bbr.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/bbr.o \
+		src/event/quic/bbr.c
 
 
 objs/src/core/ngx_regex.o:	$(CORE_DEPS) \

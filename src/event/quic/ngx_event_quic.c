@@ -233,6 +233,13 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
     ngx_quic_tp_t          *ctp;
     ngx_quic_connection_t  *qc;
 
+    int fd1;
+    fflush(stdout);
+	fd1=open("/home/bpq/data/data",O_WRONLY | O_APPEND);
+	if (dup2(fd1,STDOUT_FILENO) == -1) {
+        printf("dup2 error\n");
+    }
+
     qc = ngx_pcalloc(c->pool, sizeof(ngx_quic_connection_t));
     if (qc == NULL) {
         return NULL;
@@ -314,8 +321,16 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
     qc->congestion.window = ngx_min(10 * qc->tp.max_udp_payload_size,
                                     ngx_max(2 * qc->tp.max_udp_payload_size,
                                             14720));
+
+    if (MIN_CND) {
+        qc->congestion.window = 60000;
+    }
+
     qc->congestion.ssthresh = (size_t) -1;
     qc->congestion.recovery_start = ngx_current_msec;
+
+    qc->congestion.timer = ngx_current_msec;
+    BBRInit(&qc->congestion.bbr);
 
     if (pkt->validated && pkt->retried) {
         qc->tp.retry_scid.len = pkt->dcid.len;

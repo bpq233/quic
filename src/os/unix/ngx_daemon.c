@@ -48,10 +48,10 @@ ngx_daemon(ngx_log_t *log)
         return NGX_ERROR;
     }
 
-    if (dup2(fd, STDOUT_FILENO) == -1) {
-        ngx_log_error(NGX_LOG_EMERG, log, ngx_errno, "dup2(STDOUT) failed");
-        return NGX_ERROR;
-    }
+    // if (dup2(fd, STDOUT_FILENO) == -1) {
+    //     ngx_log_error(NGX_LOG_EMERG, log, ngx_errno, "dup2(STDOUT) failed");
+    //     return NGX_ERROR;
+    // }
 
 #if 0
     if (dup2(fd, STDERR_FILENO) == -1) {

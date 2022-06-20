@@ -74,6 +74,15 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
 
     qc = ngx_quic_get_connection(c);
 
+    // ngx_quic_congestion_t  *cg = &qc->congestion;
+    // if (USE_BBR) {
+    //     printf("pnum: %ld %ld %ld %ld\n", f->pnum, f->plen, f->delivered, cg->bbr.delivered);
+    //     BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime);
+    //     BBRUpdateRTprop(&cg->bbr, qc->min_rtt);
+    //     BBRUpdatePacingRate(&cg->bbr);
+    //     printf("%ld %ld %ld\n", cg->bbr.BtlBw, cg->bbr.RTprop, cg->bbr.pacing_rate);
+    // }
+
     ctx = ngx_quic_get_send_ctx(qc, pkt->level);
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
@@ -184,6 +193,7 @@ ngx_quic_rtt_sample(ngx_connection_t *c, ngx_quic_ack_frame_t *ack,
     qc = ngx_quic_get_connection(c);
 
     latest_rtt = ngx_current_msec - send_time;
+
     qc->latest_rtt = latest_rtt;
 
     if (qc->min_rtt == NGX_TIMER_INFINITE) {
@@ -311,6 +321,7 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     ngx_quic_congestion_t  *cg;
     ngx_quic_connection_t  *qc;
 
+   
     if (f->plen == 0) {
         return;
     }
@@ -318,9 +329,44 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
+    if (USE_BBR) {
+
+        timer = f->sendtime - cg->recovery_start;
+        if ((ngx_msec_int_t) timer >= 0) {
+            cg->bbr.conservation = false;
+            BBRRestoreCwnd(&cg->bbr);
+        }
+        cg->bbr.is_app_limit = f->is_app_limit;
+        // if (cg->in_flight < cg->window / 3) {
+        //     cg->bbr.is_app_limit = true;
+        // } else {
+        //     cg->bbr.is_app_limit = false;
+        // }
+        // if (ngx_current_msec > cg->bbr.timer || cg->bbr.is_app_limit) {
+        //     printf("%ld %ld %d\n", cg->in_flight, cg->window, cg->bbr.is_app_limit);
+        // }
+
+        cg->in_flight -= f->plen;
+        BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
+        BBRCheckCyclePhase(&cg->bbr, cg->in_flight);
+        BBRCheckFullPipe(&cg->bbr);
+        BBRCheckDrain(&cg->bbr, cg->in_flight);
+        BBRUpdateRTprop(&cg->bbr, ngx_current_msec - f->sendtime);
+        BBRCheckProbeRTT(&cg->bbr, cg->in_flight);
+
+        BBRUpdatePacingRate(&cg->bbr);
+        BBRUpdateCwnd(&cg->bbr, cg->in_flight, f->plen);
+        cg->window = cg->bbr.cwnd;
+
+
+        return;
+    }
+
     blocked = (cg->in_flight >= cg->window) ? 1 : 0;
 
     cg->in_flight -= f->plen;
+
+    BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
 
     timer = f->last - cg->recovery_start;
 
@@ -328,6 +374,7 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
                        "quic congestion ack recovery win:%uz ss:%z if:%uz",
                        cg->window, cg->ssthresh, cg->in_flight);
+        //printf("recovery :    cwnd : %ld  inflight : %ld\n", cg->window, cg->in_flight);
 
         goto done;
     }
@@ -335,12 +382,16 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     if (cg->window < cg->ssthresh) {
         cg->window += f->plen;
 
+        //printf("ssthresh :    cwnd : %ld  inflight : %ld\n", cg->window, cg->in_flight);
+
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
                        "quic congestion slow start win:%uz ss:%z if:%uz",
                        cg->window, cg->ssthresh, cg->in_flight);
 
     } else {
         cg->window += qc->tp.max_udp_payload_size * f->plen / cg->window;
+
+        //printf("congestion :  cwnd : %ld  inflight : %ld\n", cg->window, cg->in_flight);
 
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
                        "quic congestion avoidance win:%uz ss:%z if:%uz",
@@ -537,7 +588,15 @@ ngx_quic_persistent_congestion(ngx_connection_t *c)
     cg = &qc->congestion;
 
     cg->recovery_start = ngx_current_msec;
+    if (USE_BBR) {
+        BBRSaveCwnd(&cg->bbr);
+        cg->bbr.conservation = true;
+        return;
+    }
     cg->window = qc->tp.max_udp_payload_size * 2;
+    if (MIN_CND) {
+        cg->window = MIN_CND;
+    }
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
                    "quic persistent congestion win:%uz", cg->window);
@@ -629,6 +688,7 @@ ngx_quic_resend_frames(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
             /* fall through */
 
         default:
+            f->is_resend = 1;
             ngx_queue_insert_tail(&ctx->frames, &f->queue);
         }
 
@@ -657,12 +717,29 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
+    cg->bbr.resend += f->plen;
+    cg->bbr.resend_s += f->plen;
+
+    if (USE_BBR) {
+        BBRSaveCwnd(&cg->bbr);
+        //cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 60000);
+        cg->in_flight -= f->plen;
+        f->plen = 0;
+        // cg->recovery_start = ngx_current_msec;
+        // cg->bbr.conservation = true;
+        return;
+    }
+
     blocked = (cg->in_flight >= cg->window) ? 1 : 0;
 
     cg->in_flight -= f->plen;
     f->plen = 0;
 
     timer = f->last - cg->recovery_start;
+
+    if (cg->bbr.resend_s * 100.0 / cg->bbr.send_s <= 11) {
+        return;
+    }
 
     if ((ngx_msec_int_t) timer <= 0) {
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,
@@ -675,9 +752,19 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     cg->recovery_start = ngx_current_msec;
     cg->window /= 2;
 
-    if (cg->window < qc->tp.max_udp_payload_size * 2) {
-        cg->window = qc->tp.max_udp_payload_size * 2;
+    if (MIN_CND) {
+        if (cg->window < MIN_CND) {
+            cg->window = MIN_CND;
+        }
+    } else {
+        if (cg->window < qc->tp.max_udp_payload_size * 2) {
+            cg->window = qc->tp.max_udp_payload_size * 2;
+        }
     }
+
+    // if (cg->window < qc->tp.max_udp_payload_size * 2) {
+    //     cg->window = qc->tp.max_udp_payload_size * 2;
+    // }
 
     cg->ssthresh = cg->window;
 

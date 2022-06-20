@@ -10,6 +10,7 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <stdbool.h>
 
 
 /*
@@ -263,16 +264,24 @@ typedef struct ngx_quic_frame_s                 ngx_quic_frame_t;
 
 struct ngx_quic_frame_s {
     ngx_uint_t                                  type;
+    ngx_uint_t                                  is_resend;
     enum ssl_encryption_level_t                 level;
     ngx_queue_t                                 queue;
     uint64_t                                    pnum;
     size_t                                      plen;
+    size_t                                      delivered;
     ngx_msec_t                                  first;
     ngx_msec_t                                  last;
+    ngx_msec_t                                  first_sendtime;
+    ngx_msec_t                                  sendtime;
     ssize_t                                     len;
     unsigned                                    need_ack:1;
     unsigned                                    pkt_need_ack:1;
     unsigned                                    flush:1;
+
+    bool                                        is_app_limit;
+
+    
 
     ngx_chain_t                                *data;
     union {
