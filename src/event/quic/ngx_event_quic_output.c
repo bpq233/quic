@@ -284,6 +284,7 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
 
             cg->in_flight += f->plen;
 
+            cg->bbr.send_rtt += f->plen;
             cg->bbr.sum += f->plen;
             cg->bbr.send_s += f->plen;
             // if (f->len > 0) {

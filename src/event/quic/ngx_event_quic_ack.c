@@ -720,6 +720,8 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     cg->bbr.resend += f->plen;
     cg->bbr.resend_s += f->plen;
 
+    cg->bbr.resend_rtt += f->plen;
+
     if (USE_BBR) {
         BBRSaveCwnd(&cg->bbr);
         //cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 60000);
@@ -737,9 +739,9 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
 
     timer = f->last - cg->recovery_start;
 
-    if (cg->bbr.resend_s * 100.0 / cg->bbr.send_s <= 11) {
-        return;
-    }
+    // if (cg->bbr.resend_s * 100.0 / cg->bbr.send_s <= 11) {
+    //     return;
+    // }
 
     if ((ngx_msec_int_t) timer <= 0) {
         ngx_log_debug3(NGX_LOG_DEBUG_EVENT, c->log, 0,

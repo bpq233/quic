@@ -39,7 +39,7 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <bbr.h>
 
 #define USE_BBR                 1
-#define MIN_CND                 65536*2
+#define MIN_CND                 1460 * 4
 /* RFC 9002, 6.2.2.  Handshakes and New Paths: kInitialRtt */
 #define NGX_QUIC_INITIAL_RTT                 333 /* ms */
 

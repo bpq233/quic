@@ -9,6 +9,7 @@ extern ngx_module_t  ngx_errlog_module;
 extern ngx_module_t  ngx_conf_module;
 extern ngx_module_t  ngx_openssl_module;
 extern ngx_module_t  ngx_quic_module;
+extern ngx_module_t  ngx_quic_bpf_module;
 extern ngx_module_t  ngx_regex_module;
 extern ngx_module_t  ngx_events_module;
 extern ngx_module_t  ngx_event_core_module;
@@ -67,6 +68,7 @@ ngx_module_t *ngx_modules[] = {
     &ngx_conf_module,
     &ngx_openssl_module,
     &ngx_quic_module,
+    &ngx_quic_bpf_module,
     &ngx_regex_module,
     &ngx_events_module,
     &ngx_event_core_module,
@@ -127,6 +129,7 @@ char *ngx_module_names[] = {
     "ngx_conf_module",
     "ngx_openssl_module",
     "ngx_quic_module",
+    "ngx_quic_bpf_module",
     "ngx_regex_module",
     "ngx_events_module",
     "ngx_event_core_module",

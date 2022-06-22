@@ -5,6 +5,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <stdbool.h>
+#include <loss_filter.h>
 
 
 enum Mode {
@@ -40,6 +41,7 @@ typedef struct {
     uint64_t  cycle_index;
     uint64_t  pacing_rate;
     
+    uint64_t  cnt;
     uint64_t  round_count;
     uint64_t  full_bw;
     uint64_t  full_bw_count;
@@ -49,6 +51,10 @@ typedef struct {
     uint64_t  cwnd;
     uint64_t  prior_cwnd;
     uint64_t  queue[10];
+    uint64_t  send_rtt;
+    uint64_t  resend_rtt;
+    
+
     uint64_t  sum;
     uint64_t  send_s;
     uint64_t  resend_s;
@@ -68,6 +74,8 @@ typedef struct {
     bool  rtprop_expired;
     bool is_at_full_bandwidth_;
     bool conservation;
+
+    Loss_Filter loss_filter;
     
 
 }BBR;

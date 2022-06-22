@@ -6,7 +6,7 @@
 
 
 #ifndef NGX_COMPILER
-#define NGX_COMPILER  "gcc 7.5.0 (Ubuntu 7.5.0-3ubuntu1~18.04) "
+#define NGX_COMPILER  "gcc 9.4.0 (Ubuntu 9.4.0-1ubuntu1~20.04.1) "
 #endif
 
 
@@ -95,8 +95,18 @@
 #endif
 
 
+#ifndef NGX_HAVE_BPF
+#define NGX_HAVE_BPF  1
+#endif
+
+
 #ifndef NGX_HAVE_SO_COOKIE
 #define NGX_HAVE_SO_COOKIE  1
+#endif
+
+
+#ifndef NGX_HAVE_UDP_SEGMENT
+#define NGX_HAVE_UDP_SEGMENT  1
 #endif
 
 
@@ -418,13 +428,18 @@
 #endif
 
 
-#ifndef NGX_PCRE
-#define NGX_PCRE  1
+#ifndef NGX_QUIC_BPF
+#define NGX_QUIC_BPF  1
 #endif
 
 
-#ifndef NGX_HAVE_PCRE_JIT
-#define NGX_HAVE_PCRE_JIT  1
+#ifndef NGX_PCRE2
+#define NGX_PCRE2  1
+#endif
+
+
+#ifndef NGX_PCRE
+#define NGX_PCRE  1
 #endif
 
 

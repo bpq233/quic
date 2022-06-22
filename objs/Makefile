@@ -76,6 +76,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/os/unix/ngx_process_cycle.h \
 	src/os/unix/ngx_linux_config.h \
 	src/os/unix/ngx_linux.h \
+	src/core/ngx_bpf.h \
 	src/event/ngx_event_openssl.h \
 	src/event/quic/ngx_event_quic.h \
 	src/event/quic/ngx_event_quic_transport.h \
@@ -91,6 +92,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/event/quic/ngx_event_quic_output.h \
 	src/event/quic/ngx_event_quic_socket.h \
 	src/event/quic/bbr.h \
+	src/event/quic/loss_filter.h \
 	src/core/ngx_regex.h \
 	objs/ngx_auto_config.h
 
@@ -197,6 +199,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/os/unix/ngx_linux_init.o \
 	objs/src/event/modules/ngx_epoll_module.o \
 	objs/src/os/unix/ngx_linux_sendfile_chain.o \
+	objs/src/core/ngx_bpf.o \
 	objs/src/event/ngx_event_openssl.o \
 	objs/src/event/ngx_event_openssl_stapling.o \
 	objs/src/event/quic/ngx_event_quic.o \
@@ -212,6 +215,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_output.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
 	objs/src/event/quic/bbr.o \
+	objs/src/event/quic/loss_filter.o \
+	objs/src/event/quic/ngx_event_quic_bpf.o \
+	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
 	objs/src/http/ngx_http.o \
 	objs/src/http/ngx_http_core_module.o \
@@ -345,6 +351,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/os/unix/ngx_linux_init.o \
 	objs/src/event/modules/ngx_epoll_module.o \
 	objs/src/os/unix/ngx_linux_sendfile_chain.o \
+	objs/src/core/ngx_bpf.o \
 	objs/src/event/ngx_event_openssl.o \
 	objs/src/event/ngx_event_openssl_stapling.o \
 	objs/src/event/quic/ngx_event_quic.o \
@@ -360,6 +367,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_output.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
 	objs/src/event/quic/bbr.o \
+	objs/src/event/quic/loss_filter.o \
+	objs/src/event/quic/ngx_event_quic_bpf.o \
+	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
 	objs/src/http/ngx_http.o \
 	objs/src/http/ngx_http_core_module.o \
@@ -424,7 +434,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/http/modules/ngx_http_upstream_keepalive_module.o \
 	objs/src/http/modules/ngx_http_upstream_zone_module.o \
 	objs/ngx_modules.o \
-	-L../boringssl/build/ssl -L../boringssl/build/crypto -ldl -lpthread -lcrypt -lpcre -lssl -lcrypto -ldl -lpthread -lz \
+	-L../boringssl/build/ssl -L../boringssl/build/crypto -ldl -lpthread -lcrypt -lpcre2-8 -lssl -lcrypto -ldl -lpthread -lz \
 	-Wl,-E
 	
 
@@ -907,6 +917,13 @@ objs/src/os/unix/ngx_linux_sendfile_chain.o:	$(CORE_DEPS) \
 		src/os/unix/ngx_linux_sendfile_chain.c
 
 
+objs/src/core/ngx_bpf.o:	$(CORE_DEPS) \
+	src/core/ngx_bpf.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/core/ngx_bpf.o \
+		src/core/ngx_bpf.c
+
+
 objs/src/event/ngx_event_openssl.o:	$(CORE_DEPS) \
 	src/event/ngx_event_openssl.c
 	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
@@ -1010,6 +1027,27 @@ objs/src/event/quic/bbr.o:	$(CORE_DEPS) \
 	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/event/quic/bbr.o \
 		src/event/quic/bbr.c
+
+
+objs/src/event/quic/loss_filter.o:	$(CORE_DEPS) \
+	src/event/quic/loss_filter.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/loss_filter.o \
+		src/event/quic/loss_filter.c
+
+
+objs/src/event/quic/ngx_event_quic_bpf.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_event_quic_bpf.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_event_quic_bpf.o \
+		src/event/quic/ngx_event_quic_bpf.c
+
+
+objs/src/event/quic/ngx_event_quic_bpf_code.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_event_quic_bpf_code.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_event_quic_bpf_code.o \
+		src/event/quic/ngx_event_quic_bpf_code.c
 
 
 objs/src/core/ngx_regex.o:	$(CORE_DEPS) \

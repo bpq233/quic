@@ -78,10 +78,13 @@ void BBRInit(BBR *bbr) {
     bbr->prior_cwnd = 0;
     bbr->first_sendtime = ngx_current_msec;
     bbr->start_time = ngx_current_msec;
+    bbr->send_rtt = 0;
+    bbr->resend_rtt = 0;
 
     //BBRInitRoundCounting
     bbr->round_start = false;
     bbr->round_count = 0;
+    bbr->cnt = 0;
     bbr->delivered = 1;
     bbr->current_round_trip_end_ = 0;
 
@@ -99,6 +102,7 @@ void BBRInit(BBR *bbr) {
     }
     bbr->queue[5] = 1000;
 
+    init_Loss_Filter(&bbr->loss_filter);
     BBREnterStartup(bbr);
 }
 
@@ -142,7 +146,12 @@ void BBRCheckDrain(BBR *bbr, uint64_t pck_inflight) {
 void UpdateRoundtripCounter(BBR *bbr, uint64_t p_drivered, uint64_t plen) {
     bbr->delivered += plen;
     if (p_drivered >= bbr->current_round_trip_end_) {
+        //printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%ld\n", ngx_current_msec - bbr->start_time, bbr->resend_rtt, bbr->send_rtt, bbr->resend_rtt * 100.0 / bbr->send_rtt, bbr->resend, bbr->sum, bbr->resend * 100.0 / bbr->sum, bbr->loss_filter.rank);
         bbr->round_start = true;
+        float loss_rtt = bbr->resend_rtt * 1.0 / bbr->send_rtt;
+        insertLoss(&bbr->loss_filter, loss_rtt);
+        bbr->send_rtt = 0;
+        bbr->resend_rtt = 0;
         if (!bbr->is_app_limit) {
             bbr->round_count++;
             bbr->queue[bbr->round_count % 10] = 0;
@@ -215,6 +224,15 @@ void BBRUpdatePacingRate(BBR *bbr) {
     uint64_t target_rate = bbr->BtlBw * bbr->pacing_gain;
     if (bbr->is_at_full_bandwidth_ || target_rate > bbr->pacing_rate) {
         bbr->pacing_rate = target_rate;
+    }
+    if (bbr->mode == PROBE_BW && bbr->pacing_gain == 1) {
+        //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
+
+        float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
+        if (bbr->loss_filter.loss_now > 0.1) {
+            f = 0;
+        }
+        bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
     }
 }
 
