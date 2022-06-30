@@ -233,12 +233,12 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
     ngx_quic_tp_t          *ctp;
     ngx_quic_connection_t  *qc;
 
-    int fd1;
-    fflush(stdout);
-	fd1=open("/home/bpq/data/data",O_WRONLY | O_APPEND);
-	if (dup2(fd1,STDOUT_FILENO) == -1) {
-        printf("dup2 error\n");
-    }
+    // int fd1;
+    // fflush(stdout);
+	// fd1=open("/home/bpq/data/data",O_WRONLY | O_APPEND);
+	// if (dup2(fd1,STDOUT_FILENO) == -1) {
+    //     printf("dup2 error\n");
+    // }
 
     qc = ngx_pcalloc(c->pool, sizeof(ngx_quic_connection_t));
     if (qc == NULL) {
