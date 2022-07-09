@@ -2042,14 +2042,20 @@ ngx_http_process_request_header(ngx_http_request_t *r)
 void
 ngx_http_process_request(ngx_http_request_t *r)
 {
-    printf("===================================\n");
-    char szArgs[100] = {0};
-    memcpy(szArgs, r->args.data,r->args.len);
-    printf("%s\n", szArgs);
-    printf("===================================\n");
+    // printf("===================================\n");
+    // char szArgs[100] = {0};
+    // memcpy(szArgs, r->args.data,r->args.len);
+    // printf("%s\n", szArgs);
+    // printf("===================================\n");
+
+    s_Args = r->args;
+
     ngx_connection_t  *c;
 
     c = r->connection;
+
+    //memcpy(c->szArgs, r->args.data,r->args.len);
+    //printf("%s\n", c->szArgs);
 
 #if (NGX_HTTP_SSL)
 

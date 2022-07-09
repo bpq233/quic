@@ -153,8 +153,11 @@ ngx_open_cached_file(ngx_open_file_cache_t *cache, ngx_str_t *name,
     ngx_pool_cleanup_file_t        *clnf;
     ngx_open_file_cache_cleanup_t  *ofcln;
 
+    
+
     of->fd = NGX_INVALID_FILE;
     of->err = 0;
+
 
     if (cache == NULL) {
 
@@ -940,6 +943,8 @@ done:
     of->is_file = ngx_is_file(&fi);
     of->is_link = ngx_is_link(&fi);
     of->is_exec = ngx_is_exec(&fi);
+
+    //printf("%s %ld\n", name->data, of->size);
 
     return NGX_OK;
 }

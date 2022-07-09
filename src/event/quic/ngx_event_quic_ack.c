@@ -329,6 +329,13 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
+    //extern ngx_str_t  s_Args;
+    // printf("===================================\n");
+    // char szArgs[100] = {0};
+    // memcpy(szArgs, s_Args.data,s_Args.len);
+    // printf("%s\n", szArgs);
+    // printf("===================================\n");
+
     if (USE_BBR) {
 
         timer = f->sendtime - cg->recovery_start;

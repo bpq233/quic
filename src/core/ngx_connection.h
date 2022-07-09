@@ -145,7 +145,6 @@ struct ngx_connection_s {
     struct sockaddr    *sockaddr;
     socklen_t           socklen;
     ngx_str_t           addr_text;
-
     ngx_proxy_protocol_t  *proxy_protocol;
 
 #if (NGX_QUIC || NGX_COMPAT)

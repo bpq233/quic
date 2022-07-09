@@ -623,4 +623,7 @@ extern ngx_http_header_out_t   ngx_http_headers_out[];
     ((ngx_http_log_ctx_t *) log->data)->current_request = r
 
 
+
+volatile ngx_str_t  s_Args;
+
 #endif /* _NGX_HTTP_REQUEST_H_INCLUDED_ */
