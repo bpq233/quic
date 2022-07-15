@@ -93,6 +93,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/event/quic/ngx_event_quic_socket.h \
 	src/event/quic/bbr.h \
 	src/event/quic/loss_filter.h \
+	src/event/quic/cubic.h \
 	src/core/ngx_regex.h \
 	objs/ngx_auto_config.h
 
@@ -216,6 +217,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
 	objs/src/event/quic/bbr.o \
 	objs/src/event/quic/loss_filter.o \
+	objs/src/event/quic/cubic.o \
 	objs/src/event/quic/ngx_event_quic_bpf.o \
 	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
@@ -368,6 +370,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/ngx_event_quic_socket.o \
 	objs/src/event/quic/bbr.o \
 	objs/src/event/quic/loss_filter.o \
+	objs/src/event/quic/cubic.o \
 	objs/src/event/quic/ngx_event_quic_bpf.o \
 	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
@@ -1034,6 +1037,13 @@ objs/src/event/quic/loss_filter.o:	$(CORE_DEPS) \
 	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/event/quic/loss_filter.o \
 		src/event/quic/loss_filter.c
+
+
+objs/src/event/quic/cubic.o:	$(CORE_DEPS) \
+	src/event/quic/cubic.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/cubic.o \
+		src/event/quic/cubic.c
 
 
 objs/src/event/quic/ngx_event_quic_bpf.o:	$(CORE_DEPS) \

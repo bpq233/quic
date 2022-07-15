@@ -37,9 +37,11 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <ngx_event_quic_output.h>
 #include <ngx_event_quic_socket.h>
 #include <bbr.h>
+#include <cubic.h>
 
 #define USE_BBR                 1
-#define MIN_CND                 1460 * 4
+#define USE_CUBIC               0
+#define MIN_CND                 1460 * 20
 /* RFC 9002, 6.2.2.  Handshakes and New Paths: kInitialRtt */
 #define NGX_QUIC_INITIAL_RTT                 333 /* ms */
 
@@ -150,6 +152,7 @@ typedef struct {
     ngx_msec_t                        recovery_start;
     ngx_msec_t                        timer;
     BBR                               bbr;
+    Cubic                             cubic;
 } ngx_quic_congestion_t;
 
 

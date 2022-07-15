@@ -138,7 +138,7 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
     cg = &qc->congestion;
     path = qc->path;
 
-    size_t length = 0, max_len = cg->bbr.pacing_rate * 10;
+    size_t length = 0, max_len = cg->bbr.pacing_rate * 5 - cg->bbr.len;
     if (USE_BBR) {
         if (cg->bbr.mode == PROBE_RTT) {
             if (cg->bbr.probe_rtt_done_stamp != 0 && ngx_current_msec > cg->bbr.probe_rtt_done_stamp + cg->bbr.RTprop) {
@@ -154,16 +154,17 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
         }
 
         if (ngx_current_msec >= cg->timer) {
-            cg->timer = ngx_current_msec + 10;
-            ngx_add_timer(&qc->push, 10);
+            cg->timer = ngx_current_msec + 5;
+            ngx_add_timer(&qc->push, 5);
         } else {
             return NGX_OK;
         }   
     }
 
     if (ngx_current_msec > cg->bbr.timer) {
+        extern int size;
         //printf("time: %lds 1s内: resend: %ld send: %ld ------%.2f 总: resend: %ld send: %ld ------%.2f BtlBW %ld\n", (ngx_current_msec - cg->bbr.start_time) / 1000, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / (cg->bbr.send_s - cg->bbr.resend_s), cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / (cg->bbr.sum - cg->bbr.resend), cg->bbr.BtlBw);
-        printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%ld,%ld\n", ngx_current_msec - cg->bbr.start_time, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / cg->bbr.send_s, cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / cg->bbr.sum, cg->bbr.BtlBw, cg->bbr.cwnd);
+        printf("%d,%ld %.2f----%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%ld,%ld\n", size,cg->in_flight, cg->bbr.over_bdp*1.0/cg->bbr.sum_inflight, ngx_current_msec - cg->bbr.start_time, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / cg->bbr.send_s, cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / cg->bbr.sum, cg->bbr.BtlBw, cg->bbr.cwnd);
        
         cg->bbr.timer = ngx_current_msec + 1000;
         cg->bbr.send_s = 0;
@@ -245,11 +246,11 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
             length += len;
             if (length >= max_len) { 
             //printf("send:  %ld %ld\n", ngx_current_msec, length);
+                cg->bbr.len = length - max_len;
                 return NGX_OK; 
             }
         }
     }
-
     return NGX_OK;
 }
 
@@ -277,7 +278,7 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
             f->first_sendtime = cg->bbr.first_sendtime;
             f->sendtime = ngx_current_msec;
             f->delivered = cg->bbr.delivered;
-            if (cg->in_flight < cg->window / 4) {
+            if (cg->in_flight < cg->window / 3) {
                 f->is_app_limit = true;
             }
             ngx_queue_insert_tail(&ctx->sent, q);
@@ -287,6 +288,16 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
             cg->bbr.send_rtt += f->plen;
             cg->bbr.sum += f->plen;
             cg->bbr.send_s += f->plen;
+
+            extern int size;
+            if (f->is_resend) {
+                cg->bbr.is_send+=f->plen;
+            } else {
+                if (size > (int)f->plen) {
+                    size-=f->plen;
+                }                   
+                //printf("%d %d\n", size, data[cnt]);
+            }
             // if (f->len > 0) {
             //     printf("time: %ld is_resend: %ld resend: %ld send: %ld ------%.2f len: %ld cwnd: %ld BtlBW %ld\n", ngx_current_msec - cg->bbr.start_time, f->is_resend, cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / (cg->bbr.sum - cg->bbr.resend), f->plen, cg->window, cg->bbr.BtlBw);
             // }

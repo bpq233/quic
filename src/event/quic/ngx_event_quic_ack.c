@@ -336,11 +336,23 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     // printf("%s\n", szArgs);
     // printf("===================================\n");
 
-    if (USE_BBR) {
+    if (USE_CUBIC) {
+        BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
+        cg->in_flight -= f->plen;
+        CubicOnAck(&cg->cubic, f->plen, f->sendtime, ngx_current_msec);
+        cg->window = cg->cubic.cwnd;
+        if (cg->window < 1460 * 20) {
+            cg->window = 1460 * 20;
+        }
+        return;
+    }
 
-        timer = f->sendtime - cg->recovery_start;
+
+    if (USE_BBR) {
+        cg->bbr.ack_byte+=f->plen;
+        timer = f->last - cg->recovery_start;
         if ((ngx_msec_int_t) timer >= 0) {
-            cg->bbr.conservation = false;
+            cg->bbr.conservation = false;    
             BBRRestoreCwnd(&cg->bbr);
         }
         cg->bbr.is_app_limit = f->is_app_limit;
@@ -352,7 +364,6 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
         // if (ngx_current_msec > cg->bbr.timer || cg->bbr.is_app_limit) {
         //     printf("%ld %ld %d\n", cg->in_flight, cg->window, cg->bbr.is_app_limit);
         // }
-
         cg->in_flight -= f->plen;
         BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
         BBRCheckCyclePhase(&cg->bbr, cg->in_flight);
@@ -588,6 +599,9 @@ ngx_quic_pcg_duration(ngx_connection_t *c)
 static void
 ngx_quic_persistent_congestion(ngx_connection_t *c)
 {
+    if (USE_BBR){
+        return;
+    }
     ngx_quic_congestion_t  *cg;
     ngx_quic_connection_t  *qc;
 
@@ -595,11 +609,7 @@ ngx_quic_persistent_congestion(ngx_connection_t *c)
     cg = &qc->congestion;
 
     cg->recovery_start = ngx_current_msec;
-    if (USE_BBR) {
-        BBRSaveCwnd(&cg->bbr);
-        cg->bbr.conservation = true;
-        return;
-    }
+
     cg->window = qc->tp.max_udp_payload_size * 2;
     if (MIN_CND) {
         cg->window = MIN_CND;
@@ -729,13 +739,33 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
 
     cg->bbr.resend_rtt += f->plen;
 
-    if (USE_BBR) {
-        BBRSaveCwnd(&cg->bbr);
-        //cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 60000);
+    if (USE_CUBIC) {
         cg->in_flight -= f->plen;
         f->plen = 0;
-        // cg->recovery_start = ngx_current_msec;
-        // cg->bbr.conservation = true;
+        CubicOnLost(&cg->cubic, f->sendtime);
+        return;
+    }
+
+    if (USE_BBR) {
+        if (cg->bbr.first_sendtime > cg->recovery_start) {
+            BBRSaveCwnd(&cg->bbr);
+        } else {
+            cg->bbr.prior_cwnd = mymax(cg->bbr.prior_cwnd, cg->bbr.cwnd);
+        }     
+        cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 30000);
+        cg->in_flight -= f->plen;
+        if (cg->bbr.conservation) {
+            cg->bbr.cwnd = mymax(cg->bbr.cwnd, cg->in_flight+cg->bbr.ack_byte);
+        }
+        cg->bbr.ack_byte=0;
+        f->plen = 0;
+        timer = f->last - cg->recovery_start;
+
+        if ((ngx_msec_int_t) timer <= 0) {
+            return;
+        }
+        cg->recovery_start = ngx_current_msec;
+        cg->bbr.conservation = true;
         return;
     }
 

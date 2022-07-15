@@ -1,7 +1,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_event.h>
-#include <cubic.h>
+#include <ngx_event_quic_connection.h>
 
 #define CUBIC_FAST_CONVERGENCE  1
 #define CUBIC_MSS               1460
@@ -12,15 +12,15 @@
 #define CUBIC_TIME_SCALE        10u
 #define CUBIC_MAX_SSTHRESH      0xFFFFFFFF
 
-#define CUBIC_MIN_WIN           (4 * CUBIC_MSS)
+#define CUBIC_MIN_WIN           (10 * CUBIC_MSS)
 #define CUBIC_MAX_INIT_WIN      (100 * CUBIC_MSS)
-#define CUBIC_INIT_WIN          (4 * CUBIC_MSS)
+#define CUBIC_INIT_WIN          (20 * CUBIC_MSS)
 #define MICROS_PER_SECOND 1000
 
 #define _min(a, b) ((a) < (b) ? (a) : (b))
 #define _max(a, b) ((a) > (b) ? (a) : (b))
 
-const static uint64_t cube_factor =
+const uint64_t cube_factor =
     (1ull << CUBE_SCALE) / CUBIC_C / CUBIC_MSS;
 
 /*
@@ -34,6 +34,7 @@ const static uint64_t cube_factor =
  */
 
 void CubicInit(Cubic *cubic) {
+    cubic->init_cwnd = CUBIC_INIT_WIN;
     cubic->epoch_start = 0;
     cubic->cwnd = CUBIC_INIT_WIN;
     cubic->tcp_cwnd = CUBIC_INIT_WIN;
@@ -68,7 +69,15 @@ void CubicUpdate(Cubic *cubic, uint64_t acked_bytes, ngx_msec_t now) {
              *             = 2^40 / (410 * MSS) = 2^30 / (410/1024*MSS)
              *             = 2^30 / (C*MSS)
              */
-            cubic->bic_K = cbrt(cube_factor * (cubic->last_max_cwnd - cubic->cwnd));
+            //cubic->bic_K = cbrt(cube_factor * (cubic->last_max_cwnd - cubic->cwnd));
+            double l = 0, r = 10000, n = cube_factor * (cubic->last_max_cwnd - cubic->cwnd);
+            while(r - l > 1e-8)
+            {
+                double mid = (l + r) / 2;
+                if(mid * mid * mid < n) l = mid;
+                else r = mid;
+            }
+            cubic->bic_K = l;
             cubic->bic_origin_point = cubic->last_max_cwnd;
         }
     }
@@ -110,7 +119,7 @@ void CubicUpdate(Cubic *cubic, uint64_t acked_bytes, ngx_msec_t now) {
     cubic->cwnd = bic_target;
 }
 
-void xqc_cubic_on_lost(Cubic *cubic, ngx_msec_t sent_time) {
+void CubicOnLost(Cubic *cubic, ngx_msec_t sent_time) {
     /* No reaction if already in a recovery period. */
     if (CubicInCongestionRecovery(cubic, sent_time)) {
         return;

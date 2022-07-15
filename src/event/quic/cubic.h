@@ -5,6 +5,7 @@
 #include <ngx_core.h>
 #include <stdbool.h>
 
+
 typedef struct {
     uint64_t        init_cwnd;          /* initial window size in MSS */
     uint64_t        cwnd;               /* current window size in bytes */
@@ -21,7 +22,7 @@ typedef struct {
 void CubicInit(Cubic *cubic);
 bool CubicInCongestionRecovery(Cubic *cubic, ngx_msec_t sent_time);
 void CubicUpdate(Cubic *cubic, uint64_t acked_bytes, ngx_msec_t now);
-void xqc_cubic_on_lost(Cubic *cubic, ngx_msec_t sent_time);
+void CubicOnLost(Cubic *cubic, ngx_msec_t sent_time);
 void CubicOnAck(Cubic *cubic, uint64_t acked_bytes, ngx_msec_t sent_time, ngx_msec_t now);
 uint64_t CubicGetCwnd(Cubic *cubic);
 void CubicReset(Cubic *cubic);

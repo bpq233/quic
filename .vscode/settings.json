@@ -5,6 +5,9 @@
         "ngx_core.h": "c",
         "array": "c",
         "string": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "ngx_event_quic_connection.h": "c",
+        "ngx_event_quic_ack.h": "c",
+        "ngx_event_quic_streams.h": "c"
     }
 }

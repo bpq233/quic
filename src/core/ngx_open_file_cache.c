@@ -945,7 +945,25 @@ done:
     of->is_exec = ngx_is_exec(&fi);
 
     //printf("%s %ld\n", name->data, of->size);
-
+    // char url[100] = {0};
+    // memcpy(url, name->data,name->len);
+    // int len = strlen(url);
+    // int i = len - 6;
+    // int c = -1;
+    // if (url[i] == 'h') {
+    //     c = url[i + 1] - '0';
+    // } else if (url[i] <= '9' && url[i] >= 0) {
+    //     c = (url[i] - '0') * 10 + url[i + 1] - '0';
+    // } 
+    // if (c != -1) {
+    //     data[c]+=of->size;
+    //     d = c;
+    // }
+    // printf("%d %d\n",c,data[c]);
+    extern int size;
+    if (of->size > size) {
+        size = of->size;
+    }
     return NGX_OK;
 }
 

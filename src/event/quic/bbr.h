@@ -53,12 +53,18 @@ typedef struct {
     uint64_t  queue[10];
     uint64_t  send_rtt;
     uint64_t  resend_rtt;
+    uint64_t  len;
+    uint64_t  ack_byte;
     
 
     uint64_t  sum;
     uint64_t  send_s;
     uint64_t  resend_s;
     uint64_t  resend;
+    uint64_t  is_send;
+
+    uint64_t  over_bdp;
+    uint64_t  sum_inflight;
 
     ngx_msec_t  timer;
     ngx_msec_t  first_sendtime;
@@ -96,6 +102,9 @@ void BBREnterProbeBW(BBR *bbr);
 void BBREnterStartup(BBR *bbr);
 uint64_t mymin(uint64_t a, uint64_t b);
 uint64_t mymax(uint64_t a, uint64_t b);
+
+
+int size, cnt;
 
 
 #endif

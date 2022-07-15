@@ -80,6 +80,8 @@ void BBRInit(BBR *bbr) {
     bbr->start_time = ngx_current_msec;
     bbr->send_rtt = 0;
     bbr->resend_rtt = 0;
+    bbr->is_send = 0;
+    bbr->len = 0;
 
     //BBRInitRoundCounting
     bbr->round_start = false;
@@ -104,6 +106,7 @@ void BBRInit(BBR *bbr) {
 
     init_Loss_Filter(&bbr->loss_filter);
     BBREnterStartup(bbr);
+
 }
 
 
@@ -197,6 +200,12 @@ void BBRUpdateBtlBw(BBR *bbr, uint64_t p_drivered, uint64_t plen, ngx_msec_t sen
         interval = 1;
     }
     uint64_t BW = drivered / interval;
+
+    if (BW > 3900) {
+        bbr->over_bdp++;
+    }
+    bbr->sum_inflight++;
+
     if (bbr->mode != STARTUP) {
         BW = mymin(BW, bbr->BtlBw * 1.25);
     }
@@ -205,7 +214,7 @@ void BBRUpdateBtlBw(BBR *bbr, uint64_t p_drivered, uint64_t plen, ngx_msec_t sen
         bbr->queue[(bbr->round_count) % 10] = BW;
     }
     
-    bbr->BtlBw = 200;
+    bbr->BtlBw = 300;
     for (uint64_t i = 0; i < 10; i++) {
         if (bbr->queue[i] > bbr->BtlBw) {
             bbr->BtlBw = bbr->queue[i];
@@ -234,12 +243,20 @@ void BBRUpdatePacingRate(BBR *bbr) {
         }
         bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
     }
-}
+    extern int buffer;
+    if (size <= 0 || buffer == 0) {
+        return;
+    }
+    u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
+    //printf("%d, %d, %ld\n", size, buffer, min_rate);
+    bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
+    bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->BtlBw * bbr->pacing_gain);
+   }
 
 
 void BBRUpdateCwnd(BBR *bbr, uint64_t in_flight, uint64_t pck_diver) {
     GetTargetCongestionWindow(bbr, bbr->cwnd_gain);
-    if (bbr->conservation && ngx_current_msec > bbr->rtprop_stamp + bbr->RTprop * 3) {
+    if (bbr->conservation) {
         bbr->cwnd = mymax(bbr->cwnd, in_flight + pck_diver);
     } else {
         if (bbr->is_at_full_bandwidth_) {

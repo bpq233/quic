@@ -2042,13 +2042,26 @@ ngx_http_process_request_header(ngx_http_request_t *r)
 void
 ngx_http_process_request(ngx_http_request_t *r)
 {
+    char szArgs[100] = {0};
+    memcpy(szArgs, r->args.data,r->args.len);
+
     // printf("===================================\n");
-    // char szArgs[100] = {0};
-    // memcpy(szArgs, r->args.data,r->args.len);
     // printf("%s\n", szArgs);
     // printf("===================================\n");
 
     s_Args = r->args;
+
+    int len = strlen(szArgs);
+    if (len > 0) {
+        buffer = 0;
+        for (int i = 7; ;i++) {
+            if (szArgs[i] == '.' || i >= len) {
+                break;
+            }
+            buffer = buffer * 10 + szArgs[i] - '0';  
+        }
+    }
+    //printf("%d\n", buffer);
 
     ngx_connection_t  *c;
 

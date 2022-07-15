@@ -331,6 +331,7 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
 
     qc->congestion.timer = ngx_current_msec;
     BBRInit(&qc->congestion.bbr);
+    CubicInit(&qc->congestion.cubic);
 
     if (pkt->validated && pkt->retried) {
         qc->tp.retry_scid.len = pkt->dcid.len;
