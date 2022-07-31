@@ -18,9 +18,7 @@
 const uint32_t ngx_bbr_bw_win_size = NGX_BBR_CYCLE_LENGTH + 2;
 /* Window of min rtt filter, in sec */
 /* Minimum time spent in BBR_PROBE_RTT, in ms*/
-const uint32_t ngx_bbr_probertt_time_ms = 100;
-/* Initial rtt before any samples are received, in ms  */
-const uint64_t ngx_bbr_initial_rtt_ms = 100;
+const uint32_t ngx_bbr_probertt_time_ms = 200;
 /* The gain of pacing rate for START_UP, 2/(ln2) */
 const float ngx_bbr_high_gain = 2.885;
 /* Gain in BBR_DRAIN */
@@ -35,15 +33,7 @@ const uint32_t ngx_bbr_min_cwnd = 4 * NGX_BBR_MAX_DATAGRAMSIZE;
 const float ngx_bbr_fullbw_thresh = 1.25;
 /* After 3 rounds bandwidth less than (1.25x), estimate the pipe is full */
 const uint32_t ngx_bbr_fullbw_cnt = 3;
-const float ngx_bbr_probe_rtt_gain = 0;
 const uint32_t ngx_bbr_probertt_win_size_ms = 10000;
-
-
-/* BBRv2 parameters */
-const float ngx_bbr2_drain_gain = 0.75;
-/* keep minrtt valid for 10s if it has not been changed */
-/* slow down */
-const float ngx_bbr2_startup_pacing_gain_on_lost = 1.5;
 
 
 static void 
