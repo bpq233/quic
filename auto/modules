@@ -1345,7 +1345,11 @@ if [ $USE_OPENSSL_QUIC = YES ]; then
                      src/event/quic/ngx_event_quic_socket.h \
 					 src/event/quic/bbr.h \
 					 src/event/quic/loss_filter.h \
-					 src/event/quic/cubic.h"
+					 src/event/quic/cubic.h \
+                     src/event/quic/ngx_sample.h \
+                     src/event/quic/ngx_pacing.h \
+                     src/event/quic/ngx_window_filter.h \
+                     src/event/quic/ngx_bbr.h"
     ngx_module_srcs="src/event/quic/ngx_event_quic.c \
                      src/event/quic/ngx_event_quic_transport.c \
                      src/event/quic/ngx_event_quic_protection.c \
@@ -1360,7 +1364,11 @@ if [ $USE_OPENSSL_QUIC = YES ]; then
                      src/event/quic/ngx_event_quic_socket.c \
 					 src/event/quic/bbr.c \
 					 src/event/quic/loss_filter.c \
-					 src/event/quic/cubic.c"
+					 src/event/quic/cubic.c \
+                     src/event/quic/ngx_sample.c \
+                     src/event/quic/ngx_pacing.c \
+                     src/event/quic/ngx_window_filter.c \
+                     src/event/quic/ngx_bbr.c"
 
     ngx_module_libs=
     ngx_module_link=YES

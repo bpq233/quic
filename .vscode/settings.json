@@ -8,6 +8,9 @@
         "string_view": "c",
         "ngx_event_quic_connection.h": "c",
         "ngx_event_quic_ack.h": "c",
-        "ngx_event_quic_streams.h": "c"
+        "ngx_event_quic_streams.h": "c",
+        "stdbool.h": "c",
+        "ngx_event_quic_socket.h": "c",
+        "ngx_window_filter.h": "c"
     }
 }

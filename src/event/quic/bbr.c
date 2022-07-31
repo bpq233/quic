@@ -4,6 +4,130 @@
 #include <ngx_event_quic_connection.h>
 
 
+// treap
+
+
+// const int INF = 1e8;
+
+// struct Node
+// {
+//     int l, r;
+//     int key, val;
+//     int cnt, size;
+// }tr[1100];
+
+// int root, idx;
+// int node[1100], v = 0;
+
+// void pushup(int p)
+// {
+//     tr[p].size = tr[tr[p].l].size + tr[tr[p].r].size + tr[p].cnt;
+// }
+
+// void close1(int k) {
+//     node[++v] = k;
+// }
+
+// int get_node(int key)
+// {
+//     int c = node[v--];
+//     tr[c].key = key;
+//     tr[c].val = rand();
+//     tr[c].cnt = tr[c].size = 1;
+//     return c;
+// }
+
+// void zig(int *p)  
+// {
+//     int q = tr[*p].l;
+//     tr[*p].l = tr[q].r, tr[q].r = *p, *p = q;
+//     pushup(tr[*p].r), pushup(*p);
+// }
+
+// void zag(int *p)    
+// {
+//     int q = tr[*p].r;
+//     tr[*p].r = tr[q].l, tr[q].l = *p, *p = q;
+//     pushup(tr[*p].l), pushup(*p);
+// }
+
+// void build()
+// {
+//     for (int i = 1; i < 1010; i++) {
+//         node[++v] = i;
+//     }
+//     get_node(-INF), get_node(INF);
+//     root = 1, tr[1].r = 2;
+//     pushup(root);
+
+//     if (tr[1].val < tr[2].val) zag(&root);
+// }
+
+
+// void insert(int *p, int key)
+// {
+//     if (!(*p)) *p = get_node(key);
+//     else if (tr[*p].key == key) tr[*p].cnt ++ ;
+//     else if (tr[*p].key > key)
+//     {
+//         insert(&tr[*p].l, key);
+//         if (tr[tr[*p].l].val > tr[*p].val) zig(p);
+//     }
+//     else
+//     {
+//         insert(&tr[*p].r, key);
+//         if (tr[tr[*p].r].val > tr[*p].val) zag(p);
+//     }
+//     pushup(*p);
+// }
+
+// void remove1(int *p, int key)
+// {
+//     if (!(*p)) return;
+//     if (tr[*p].key == key)
+//     {
+//         if (tr[*p].cnt > 1) tr[*p].cnt -- ;
+//         else if (tr[*p].l || tr[*p].r)
+//         {
+//             if (!tr[*p].r || tr[tr[*p].l].val > tr[tr[*p].r].val)
+//             {
+//                 zig(p);
+//                 remove1(&tr[*p].r, key);
+//             }
+//             else
+//             {
+//                 zag(p);
+//                 remove1(&tr[*p].l, key);
+//             }
+//         }
+//         else {
+//             close1(*p);
+//             *p = 0;
+//         }
+//     }
+//     else if (tr[*p].key > key) remove1(&tr[*p].l, key);
+//     else remove1(&tr[*p].r, key);
+
+//     pushup(*p);
+// }
+
+
+// int get_key_by_rank(int p, int rank)   // 通过排名找数值
+// {
+//     if (!p) return INF;     // 本题中不会发生此情况
+//     if (tr[tr[p].l].size >= rank) return get_key_by_rank(tr[p].l, rank);
+//     if (tr[tr[p].l].size + tr[p].cnt >= rank) return tr[p].key;
+//     return get_key_by_rank(tr[p].r, rank - tr[tr[p].l].size - tr[p].cnt);
+// }
+
+ int bw[1010], tot;
+ bool flag;
+
+// bbr
+
+
+
+
 const float BBRHighGain = 2.885f;
 const float kStartupGrowthTarget = 1.25;
 const uint64_t  SMSS = 1460;
@@ -106,7 +230,7 @@ void BBRInit(BBR *bbr) {
 
     init_Loss_Filter(&bbr->loss_filter);
     BBREnterStartup(bbr);
-
+    //build();
 }
 
 
@@ -155,7 +279,7 @@ void UpdateRoundtripCounter(BBR *bbr, uint64_t p_drivered, uint64_t plen) {
         insertLoss(&bbr->loss_filter, loss_rtt);
         bbr->send_rtt = 0;
         bbr->resend_rtt = 0;
-        if (!bbr->is_app_limit) {
+        if (!bbr->is_app_limit && bbr->mode != PROBE_RTT) {
             bbr->round_count++;
             bbr->queue[bbr->round_count % 10] = 0;
         }
@@ -189,6 +313,8 @@ void BBRUpdateRTprop(BBR *bbr, ngx_msec_t sample_min_rtt) {
     }
 }
 
+bool st[101];
+
 void BBRUpdateBtlBw(BBR *bbr, uint64_t p_drivered, uint64_t plen, ngx_msec_t send_time, ngx_msec_t send_interval) {
     UpdateRoundtripCounter(bbr, p_drivered, plen);
     uint64_t drivered = bbr->delivered - p_drivered;
@@ -220,12 +346,54 @@ void BBRUpdateBtlBw(BBR *bbr, uint64_t p_drivered, uint64_t plen, ngx_msec_t sen
             bbr->BtlBw = bbr->queue[i];
         }       
     }
+    // if (bbr->BtlBw < 3000) {
+    //     printf("%ld\n", bbr->BtlBw);
+    // }
     bbr->first_sendtime = send_time;
-    //printf("%ld %ld %ld %ld\n", drivered, interval, BW, p_drivered);
+    // printf("%ld %ld %ld %ld\n", drivered, interval, BW, p_drivered);
     // if (interval < 250) {
     //     printf("%ld %ld %ld %ld\n", drivered, interval, BW, p_drivered);
     // }
-    //printf("%ld %ld %ld %ld\n", drivered, interval, BW, bbr->BtlBw);
+    // printf("%ld %ld %ld %ld\n", drivered, interval, BW, bbr->BtlBw);
+
+    // if (USE_BBR_S) {
+    //     if (bbr->is_app_limit || bbr->mode != PROBE_BW) return;
+
+    //     bw[tot] = BW;
+    //     tot++;
+    //     if (tot >= 100) {
+    //         flag = true;
+    //         tot = 0;
+    //     }
+    //     if (flag) {
+    //         for (int i = 0; i < 100; i++) st[i] = false;
+    //         for (int i = 0; i < 15; i++) {
+    //             int max = 300, c = -1; 
+    //             for (int i = 0; i < 100; i++) {
+    //                 if (bw[i] > max && st[i] == false) {
+    //                     max = bw[i];
+    //                     c = i;
+    //                 }
+    //             }
+    //             st[c] = true;
+    //             if (i == 14) bbr->BtlBw = max;
+    //         }
+    //     }
+
+    //     // if (flag) {
+    //     //     remove1(&root, bw[tot]);
+    //     // }
+    //     // insert(&root, BW); 
+    //     // bw[tot] = BW;
+    //     // tot++;
+    //     // if (tot >= 100) {
+    //     //     flag = true;
+    //     //     tot = 0;
+    //     // }
+    //     // if (flag) {
+    //     //     bbr->BtlBw = get_key_by_rank(root, 91);
+    //     // }
+    // }
 }
 
 
@@ -234,24 +402,24 @@ void BBRUpdatePacingRate(BBR *bbr) {
     if (bbr->is_at_full_bandwidth_ || target_rate > bbr->pacing_rate) {
         bbr->pacing_rate = target_rate;
     }
-    if (bbr->mode == PROBE_BW && bbr->pacing_gain == 1) {
-        //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
+    // if (bbr->mode == PROBE_BW && bbr->pacing_gain == 1) {
+    //     //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
 
-        float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
-        if (bbr->loss_filter.loss_now > 0.1) {
-            f = 0;
-        }
-        bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
-    }
-    extern int buffer;
-    if (size <= 0 || buffer == 0) {
-        return;
-    }
-    u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
-    //printf("%d, %d, %ld\n", size, buffer, min_rate);
-    bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
-    bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->BtlBw * bbr->pacing_gain);
-   }
+    //     float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
+    //     if (bbr->loss_filter.loss_now > 0.1) {
+    //         f = 0;
+    //     }
+    //     bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
+    // }
+    // extern int buffer;
+    // if (size <= 0 || buffer == 0) {
+    //     return;
+    // }
+    // u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
+    // //printf("%d, %d, %ld\n", size, buffer, min_rate);
+    // bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
+    // bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->BtlBw * bbr->pacing_gain);
+}
 
 
 void BBRUpdateCwnd(BBR *bbr, uint64_t in_flight, uint64_t pck_diver) {
@@ -304,7 +472,7 @@ void BBRRestoreCwnd(BBR *bbr) {
 }
 
 void BBRHandleProbeRTT(BBR *bbr, uint64_t pck_inflight) {
-    if (bbr->probe_rtt_done_stamp == 0 && pck_inflight <= BBRMinPipeCwnd) {
+    if (bbr->probe_rtt_done_stamp == 0) {
         bbr->probe_rtt_done_stamp = ngx_current_msec + ProbeRTTDuration + bbr->RTprop;
     } else if (bbr->probe_rtt_done_stamp != 0) {
         if (ngx_current_msec > bbr->probe_rtt_done_stamp) {
@@ -330,4 +498,6 @@ void BBRCheckProbeRTT(BBR *bbr, uint64_t pck_inflight) {
         BBRHandleProbeRTT(bbr, pck_inflight);
     }
 }
+
+
 

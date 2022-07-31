@@ -598,7 +598,6 @@ ngx_quic_write_buffer(ngx_connection_t *c, ngx_quic_buffer_t *qb,
             b->sync = 0;
         }
     }
-
     qb->last_offset = base;
     qb->last_chain = *chain;
 

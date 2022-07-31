@@ -819,6 +819,7 @@ ngx_quic_stream_send(ngx_connection_t *c, u_char *buf, size_t size)
     cl.buf = &b;
     cl.next = NULL;
 
+ 
     if (ngx_quic_stream_send_chain(c, &cl, 0) == NGX_CHAIN_ERROR) {
         return NGX_ERROR;
     }

@@ -29,6 +29,11 @@ typedef struct {
 } ngx_quic_ack_stat_t;
 
 
+bool ngx_generate_sample(ngx_connection_t *c);
+void ngx_update_sample(ngx_quic_frame_t *f, ngx_connection_t *c);
+void ngx_bbr_on_ack(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg);
+void ngx_bbr_on_lost(ngx_bbr_t *bbr, ngx_msec_t lost_sent_time);
+
 static ngx_inline ngx_msec_t ngx_quic_lost_threshold(ngx_quic_connection_t *qc);
 static void ngx_quic_rtt_sample(ngx_connection_t *c, ngx_quic_ack_frame_t *ack,
     enum ssl_encryption_level_t level, ngx_msec_t send_time);
@@ -73,6 +78,8 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
     ngx_quic_connection_t  *qc;
 
     qc = ngx_quic_get_connection(c);
+
+    qc->congestion.prior_delivered = qc->congestion.delivered;
 
     // ngx_quic_congestion_t  *cg = &qc->congestion;
     // if (USE_BBR) {
@@ -222,6 +229,7 @@ ngx_quic_rtt_sample(ngx_connection_t *c, ngx_quic_ack_frame_t *ack,
         qc->rttvar += (rttvar_sample >> 2) - (qc->rttvar >> 2);
     }
 
+
     ngx_log_debug4(NGX_LOG_DEBUG_EVENT, c->log, 0,
                    "quic rtt sample latest:%M min:%M avg:%M var:%M",
                    latest_rtt, qc->min_rtt, qc->avg_rtt, qc->rttvar);
@@ -329,6 +337,7 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
+
     //extern ngx_str_t  s_Args;
     // printf("===================================\n");
     // char szArgs[100] = {0};
@@ -349,13 +358,13 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
 
 
     if (USE_BBR) {
-        cg->bbr.ack_byte+=f->plen;
-        timer = f->last - cg->recovery_start;
-        if ((ngx_msec_int_t) timer >= 0) {
-            cg->bbr.conservation = false;    
-            BBRRestoreCwnd(&cg->bbr);
-        }
-        cg->bbr.is_app_limit = f->is_app_limit;
+        //cg->bbr.ack_byte+=f->plen;
+        // timer = f->last - cg->recovery_start;
+        // if ((ngx_msec_int_t) timer >= 0) {
+        //     cg->bbr.conservation = false;    
+        //     BBRRestoreCwnd(&cg->bbr);
+        // }
+        // cg->bbr.is_app_limit = f->is_app_limit;
         // if (cg->in_flight < cg->window / 3) {
         //     cg->bbr.is_app_limit = true;
         // } else {
@@ -365,16 +374,21 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
         //     printf("%ld %ld %d\n", cg->in_flight, cg->window, cg->bbr.is_app_limit);
         // }
         cg->in_flight -= f->plen;
-        BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
-        BBRCheckCyclePhase(&cg->bbr, cg->in_flight);
-        BBRCheckFullPipe(&cg->bbr);
-        BBRCheckDrain(&cg->bbr, cg->in_flight);
-        BBRUpdateRTprop(&cg->bbr, ngx_current_msec - f->sendtime);
-        BBRCheckProbeRTT(&cg->bbr, cg->in_flight);
+        // BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
+        // BBRCheckCyclePhase(&cg->bbr, cg->in_flight);
+        // BBRCheckFullPipe(&cg->bbr);
+        // BBRCheckDrain(&cg->bbr, cg->in_flight);
+        // BBRUpdateRTprop(&cg->bbr, qc->min_rtt);
+        // BBRCheckProbeRTT(&cg->bbr, cg->in_flight);
 
-        BBRUpdatePacingRate(&cg->bbr);
-        BBRUpdateCwnd(&cg->bbr, cg->in_flight, f->plen);
-        cg->window = cg->bbr.cwnd;
+        // BBRUpdatePacingRate(&cg->bbr);
+        // BBRUpdateCwnd(&cg->bbr, cg->in_flight, f->plen);
+        ngx_update_sample(f, c);
+        if (ngx_generate_sample(c)) {
+            ngx_bbr_on_ack(&cg->bbrs, &cg->sampler, cg);//printf("%d %d\n", cg->sampler.delivery_rate, cg->sampler.is_app_limited);
+        }
+        cg->sampler.prior_time = 0;
+        cg->window = cg->bbrs.congestion_window;
 
 
         return;
@@ -509,6 +523,7 @@ ngx_quic_detect_lost(ngx_connection_t *c, ngx_quic_ack_stat_t *st)
     newest = NGX_TIMER_INFINITE;
 
     nlost = 0;
+    qc->congestion.sampler.loss = 0;
 
     for (i = 0; i < NGX_QUIC_SEND_CTX_LAST; i++) {
 
@@ -734,10 +749,6 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
-    cg->bbr.resend += f->plen;
-    cg->bbr.resend_s += f->plen;
-
-    cg->bbr.resend_rtt += f->plen;
 
     if (USE_CUBIC) {
         cg->in_flight -= f->plen;
@@ -747,25 +758,29 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     }
 
     if (USE_BBR) {
-        if (cg->bbr.first_sendtime > cg->recovery_start) {
-            BBRSaveCwnd(&cg->bbr);
-        } else {
-            cg->bbr.prior_cwnd = mymax(cg->bbr.prior_cwnd, cg->bbr.cwnd);
-        }     
-        cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 30000);
-        cg->in_flight -= f->plen;
-        if (cg->bbr.conservation) {
-            cg->bbr.cwnd = mymax(cg->bbr.cwnd, cg->in_flight+cg->bbr.ack_byte);
-        }
-        cg->bbr.ack_byte=0;
-        f->plen = 0;
-        timer = f->last - cg->recovery_start;
+        // if (cg->bbr.first_sendtime > cg->recovery_start) {
+        //     BBRSaveCwnd(&cg->bbr);
+        // } else {
+        //     cg->bbr.prior_cwnd = mymax(cg->bbr.prior_cwnd, cg->bbr.cwnd);
+        // }     
+        // cg->bbr.cwnd = mymax(cg->bbr.cwnd - f->plen, 30000);
+        
+        // if (cg->bbr.conservation) {
+        //     cg->bbr.cwnd = mymax(cg->bbr.cwnd, cg->in_flight+cg->bbr.ack_byte);
+        // }
+        // cg->bbr.ack_byte=0;
+        
+        // timer = f->last - cg->recovery_start;
 
-        if ((ngx_msec_int_t) timer <= 0) {
-            return;
-        }
-        cg->recovery_start = ngx_current_msec;
-        cg->bbr.conservation = true;
+        // if ((ngx_msec_int_t) timer <= 0) {
+        //     return;
+        // }
+        // cg->recovery_start = ngx_current_msec;
+        // cg->bbr.conservation = true;
+        qc->congestion.sampler.loss += f->plen;
+        ngx_bbr_on_lost(&cg->bbrs, f->last);
+        cg->in_flight -= f->plen;
+        f->plen = 0;
         return;
     }
 

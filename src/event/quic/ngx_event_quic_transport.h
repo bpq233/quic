@@ -281,6 +281,14 @@ struct ngx_quic_frame_s {
 
     bool                                        is_app_limit;
 
+
+    size_t                                      po_delivered;
+    uint32_t                                    po_lost;
+    size_t                                      po_tx_in_flight;
+    ngx_msec_t                                  po_delivered_time;
+    uint32_t                                    po_is_app_limited;
+    ngx_msec_t                                  po_sent_time;
+    ngx_msec_t                                  po_first_sent_time;
     
 
     ngx_chain_t                                *data;

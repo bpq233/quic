@@ -36,9 +36,13 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <ngx_event_quic_ack.h>
 #include <ngx_event_quic_output.h>
 #include <ngx_event_quic_socket.h>
+#include <ngx_sample.h>
+#include <ngx_window_filter.h>
 #include <bbr.h>
 #include <cubic.h>
+#include <ngx_bbr.h>
 
+#define USE_BBR_S               0
 #define USE_BBR                 1
 #define USE_CUBIC               0
 #define MIN_CND                 1460 * 20
@@ -150,9 +154,20 @@ typedef struct {
     size_t                            window;
     size_t                            ssthresh;
     ngx_msec_t                        recovery_start;
+
     ngx_msec_t                        timer;
     BBR                               bbr;
     Cubic                             cubic;
+    
+    ngx_bbr_t                         bbrs;
+    ngx_sample_t                      sampler;
+    uint32_t                          app_limited;
+    uint32_t                          delivered;
+    uint32_t                          prior_delivered;
+    uint32_t                          lost_pkts_number;
+    size_t                            prior_bytes_in_flight;
+    ngx_msec_t                        delivered_time;
+    ngx_msec_t                        first_sent_time;
 } ngx_quic_congestion_t;
 
 

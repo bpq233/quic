@@ -94,6 +94,10 @@ CORE_DEPS = src/core/nginx.h \
 	src/event/quic/bbr.h \
 	src/event/quic/loss_filter.h \
 	src/event/quic/cubic.h \
+	src/event/quic/ngx_sample.h \
+	src/event/quic/ngx_pacing.h \
+	src/event/quic/ngx_window_filter.h \
+	src/event/quic/ngx_bbr.h \
 	src/core/ngx_regex.h \
 	objs/ngx_auto_config.h
 
@@ -218,6 +222,10 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/bbr.o \
 	objs/src/event/quic/loss_filter.o \
 	objs/src/event/quic/cubic.o \
+	objs/src/event/quic/ngx_sample.o \
+	objs/src/event/quic/ngx_pacing.o \
+	objs/src/event/quic/ngx_window_filter.o \
+	objs/src/event/quic/ngx_bbr.o \
 	objs/src/event/quic/ngx_event_quic_bpf.o \
 	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
@@ -371,6 +379,10 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/quic/bbr.o \
 	objs/src/event/quic/loss_filter.o \
 	objs/src/event/quic/cubic.o \
+	objs/src/event/quic/ngx_sample.o \
+	objs/src/event/quic/ngx_pacing.o \
+	objs/src/event/quic/ngx_window_filter.o \
+	objs/src/event/quic/ngx_bbr.o \
 	objs/src/event/quic/ngx_event_quic_bpf.o \
 	objs/src/event/quic/ngx_event_quic_bpf_code.o \
 	objs/src/core/ngx_regex.o \
@@ -1044,6 +1056,34 @@ objs/src/event/quic/cubic.o:	$(CORE_DEPS) \
 	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/event/quic/cubic.o \
 		src/event/quic/cubic.c
+
+
+objs/src/event/quic/ngx_sample.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_sample.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_sample.o \
+		src/event/quic/ngx_sample.c
+
+
+objs/src/event/quic/ngx_pacing.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_pacing.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_pacing.o \
+		src/event/quic/ngx_pacing.c
+
+
+objs/src/event/quic/ngx_window_filter.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_window_filter.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_window_filter.o \
+		src/event/quic/ngx_window_filter.c
+
+
+objs/src/event/quic/ngx_bbr.o:	$(CORE_DEPS) \
+	src/event/quic/ngx_bbr.c
+	$(CC) -c -g $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/quic/ngx_bbr.o \
+		src/event/quic/ngx_bbr.c
 
 
 objs/src/event/quic/ngx_event_quic_bpf.o:	$(CORE_DEPS) \

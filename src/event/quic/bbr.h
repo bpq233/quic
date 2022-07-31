@@ -82,6 +82,8 @@ typedef struct {
     bool conservation;
 
     Loss_Filter loss_filter;
+
+    int loss[110];
     
 
 }BBR;

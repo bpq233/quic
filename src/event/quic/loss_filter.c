@@ -3,12 +3,14 @@
 #include <ngx_event.h>
 #include <ngx_event_quic_connection.h>
 
+int cnt1[100];
+
 void init_Loss_Filter(Loss_Filter *loss_filter) {
     loss_filter->cnt = 0;
     loss_filter->rank = 0;
     loss_filter->loss_now = 0;
     for (int i = 0; i < 100l; i++) {
-        loss_filter->loss[i]=0.5;
+        loss_filter->loss[i]=0.1;
     }
 }
 
@@ -27,5 +29,6 @@ void updateRank(Loss_Filter *loss_filter, float loss){
             c++;
         }
     }
+    cnt1[100 - c]++;
     loss_filter->rank = c;
 }

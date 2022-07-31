@@ -12,9 +12,9 @@
 #define CUBIC_TIME_SCALE        10u
 #define CUBIC_MAX_SSTHRESH      0xFFFFFFFF
 
-#define CUBIC_MIN_WIN           (10 * CUBIC_MSS)
+#define CUBIC_MIN_WIN           (4 * CUBIC_MSS)
 #define CUBIC_MAX_INIT_WIN      (100 * CUBIC_MSS)
-#define CUBIC_INIT_WIN          (20 * CUBIC_MSS)
+#define CUBIC_INIT_WIN          (10 * CUBIC_MSS)
 #define MICROS_PER_SECOND 1000
 
 #define _min(a, b) ((a) < (b) ? (a) : (b))
@@ -65,13 +65,13 @@ void CubicUpdate(Cubic *cubic, uint64_t acked_bytes, ngx_msec_t now) {
         } else {
             /*
              * K = cubic_root(W_max*(1-beta_cubic)/C) = cubic_root((W_max-cwnd)/C)
-             * cube_factor = (1ull << XQC_CUBE_SCALE) / XQC_CUBIC_C / XQC_MSS
+             * cube_factor = (1ull << NGX_CUBE_SCALE) / NGX_CUBIC_C / NGX_MSS
              *             = 2^40 / (410 * MSS) = 2^30 / (410/1024*MSS)
              *             = 2^30 / (C*MSS)
              */
             //cubic->bic_K = cbrt(cube_factor * (cubic->last_max_cwnd - cubic->cwnd));
             double l = 0, r = 10000, n = cube_factor * (cubic->last_max_cwnd - cubic->cwnd);
-            while(r - l > 1e-8)
+            while(r - l > 1e-4)
             {
                 double mid = (l + r) / 2;
                 if(mid * mid * mid < n) l = mid;
@@ -129,7 +129,7 @@ void CubicOnLost(Cubic *cubic, ngx_msec_t sent_time) {
 
     /* should we make room for others */
     if (CUBIC_FAST_CONVERGENCE && cubic->cwnd < cubic->last_max_cwnd) {
-        /* (1.0f + XQC_CUBIC_BETA) / 2.0f convert to bitwise operations */
+        /* (1.0f + NGX_CUBIC_BETA) / 2.0f convert to bitwise operations */
         cubic->last_max_cwnd = cubic->cwnd * (CUBIC_BETA_SCALE + CUBIC_BETA) / (2 * CUBIC_BETA_SCALE);
 
     } else {
