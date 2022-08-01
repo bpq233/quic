@@ -4,6 +4,7 @@
 #include <ngx_sample.h>
 #include <ngx_window_filter.h>
 #include <stdbool.h>
+#include <loss_filter.h>
 
 #define TRUE 1
 #define FALSE 0
@@ -103,6 +104,12 @@ typedef struct ngx_bbr_s {
     bool                   enable_expect_bw;
     uint32_t               max_expect_bw;
     bool                   enable_max_expect_bw;
+
+// loss_filter
+    uint64_t  send_rtt;
+    uint64_t  resend_rtt;
+    Loss_Filter loss_filter;
+    int loss[110];
 
 } ngx_bbr_t;
 

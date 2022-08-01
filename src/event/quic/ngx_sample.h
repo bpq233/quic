@@ -19,7 +19,7 @@ typedef struct ngx_sample_s {
     /* the amount of newly delivered data*/
     uint32_t         acked;
     /* the amount of data sent but not received ack */
-    uint32_t         bytes_inflight;
+    uint32_t         in_filght;
     /* before processing this ack */
     uint32_t         prior_inflight;
     /* sampled rtt */

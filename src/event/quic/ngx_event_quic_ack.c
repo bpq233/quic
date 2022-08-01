@@ -80,6 +80,7 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
     qc = ngx_quic_get_connection(c);
 
     qc->congestion.prior_delivered = qc->congestion.delivered;
+    qc->congestion.prior_in_flight = qc->congestion.in_flight;
 
     // ngx_quic_congestion_t  *cg = &qc->congestion;
     // if (USE_BBR) {
@@ -186,7 +187,16 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
         }
     }
 
-    return ngx_quic_detect_lost(c, &send_time);
+    ngx_int_t result = ngx_quic_detect_lost(c, &send_time);
+
+    ngx_quic_congestion_t  *cg = &qc->congestion;
+    if (ngx_generate_sample(c)) {
+        ngx_bbr_on_ack(&cg->bbr, &cg->sampler, cg);//printf("%d %d\n", cg->sampler.delivery_rate, cg->sampler.is_app_limited);
+    }
+    cg->sampler.prior_time = 0;
+    cg->window = cg->bbr.congestion_window;
+
+    return result;
 }
 
 
@@ -337,6 +347,9 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     qc = ngx_quic_get_connection(c);
     cg = &qc->congestion;
 
+    blocked = (cg->in_flight >= cg->window) ? 1 : 0;
+
+    cg->in_flight -= f->plen;
 
     //extern ngx_str_t  s_Args;
     // printf("===================================\n");
@@ -346,14 +359,12 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     // printf("===================================\n");
 
     if (USE_CUBIC) {
-        BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
-        cg->in_flight -= f->plen;
         CubicOnAck(&cg->cubic, f->plen, f->sendtime, ngx_current_msec);
         cg->window = cg->cubic.cwnd;
         if (cg->window < 1460 * 20) {
             cg->window = 1460 * 20;
         }
-        return;
+        goto done;
     }
 
 
@@ -373,7 +384,6 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
         // if (ngx_current_msec > cg->bbr.timer || cg->bbr.is_app_limit) {
         //     printf("%ld %ld %d\n", cg->in_flight, cg->window, cg->bbr.is_app_limit);
         // }
-        cg->in_flight -= f->plen;
         // BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
         // BBRCheckCyclePhase(&cg->bbr, cg->in_flight);
         // BBRCheckFullPipe(&cg->bbr);
@@ -384,21 +394,9 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
         // BBRUpdatePacingRate(&cg->bbr);
         // BBRUpdateCwnd(&cg->bbr, cg->in_flight, f->plen);
         ngx_update_sample(f, c);
-        if (ngx_generate_sample(c)) {
-            ngx_bbr_on_ack(&cg->bbrs, &cg->sampler, cg);//printf("%d %d\n", cg->sampler.delivery_rate, cg->sampler.is_app_limited);
-        }
-        cg->sampler.prior_time = 0;
-        cg->window = cg->bbrs.congestion_window;
-
 
         return;
     }
-
-    blocked = (cg->in_flight >= cg->window) ? 1 : 0;
-
-    cg->in_flight -= f->plen;
-
-    BBRUpdateBtlBw(&cg->bbr, f->delivered, f->plen, f->sendtime, f->sendtime - f->first_sendtime);
 
     timer = f->last - cg->recovery_start;
 
@@ -778,7 +776,7 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
         // cg->recovery_start = ngx_current_msec;
         // cg->bbr.conservation = true;
         qc->congestion.sampler.loss += f->plen;
-        ngx_bbr_on_lost(&cg->bbrs, f->last);
+        ngx_bbr_on_lost(&cg->bbr, f->last);
         cg->in_flight -= f->plen;
         f->plen = 0;
         return;

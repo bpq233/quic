@@ -1,7 +1,5 @@
 #include <ngx_event_quic_connection.h>
 
-#define NGX_QUIC_MSS 1500
-
 
 /**
  * see https://tools.ietf.org/html/draft-cheng-iccrg-delivery-rate-estimation-00#section-3.3
@@ -58,8 +56,8 @@ ngx_generate_sample(ngx_connection_t *c)
     sampler->now = ngx_current_msec;
     sampler->rtt = qc->latest_rtt;
     sampler->srtt = qc->avg_rtt;
-    sampler->bytes_inflight = cg->in_flight;
-    sampler->prior_inflight = cg->prior_bytes_in_flight;
+    sampler->in_filght = cg->in_flight;
+    sampler->prior_inflight = cg->prior_in_flight;
     sampler->total_acked = cg->delivered;
 
     return true;

@@ -11,6 +11,8 @@
         "ngx_event_quic_streams.h": "c",
         "stdbool.h": "c",
         "ngx_event_quic_socket.h": "c",
-        "ngx_window_filter.h": "c"
+        "ngx_window_filter.h": "c",
+        "ngx_event_quic_tokens.h": "c",
+        "ngx_event_quic_migration.h": "c"
     }
 }

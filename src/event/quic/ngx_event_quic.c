@@ -232,12 +232,12 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
     ngx_quic_tp_t          *ctp;
     ngx_quic_connection_t  *qc;
 
-    int fd1;
-    fflush(stdout);
-	fd1=open("/home/bpq/data/data",O_WRONLY | O_APPEND);
-	if (dup2(fd1,STDOUT_FILENO) == -1) {
-        printf("dup2 error\n");
-    }
+    // int fd1;
+    // fflush(stdout);
+	// fd1=open("/home/bpq/data/data",O_WRONLY | O_APPEND);
+	// if (dup2(fd1,STDOUT_FILENO) == -1) {
+    //     printf("dup2 error\n");
+    // }
 
     qc = ngx_pcalloc(c->pool, sizeof(ngx_quic_connection_t));
     if (qc == NULL) {
@@ -329,9 +329,15 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
     qc->congestion.recovery_start = ngx_current_msec;
 
     qc->congestion.timer = ngx_current_msec;
-    BBRInit(&qc->congestion.bbr);
+    qc->congestion.start_time = ngx_current_msec;
+    qc->congestion.send = 0;
+    qc->congestion.send_s = 0;
+    qc->congestion.resend = 0;
+    qc->congestion.resend_s = 0;
+    //BBRInit(&qc->congestion.bbr);
     CubicInit(&qc->congestion.cubic);
-    ngx_bbr_init(&qc->congestion.bbrs, &qc->congestion.sampler);
+    ngx_bbr_init(&qc->congestion.bbr, &qc->congestion.sampler);
+    ngx_pacing_init(&qc->congestion.pacing, 1, c);
 
     if (pkt->validated && pkt->retried) {
         qc->tp.retry_scid.len = pkt->dcid.len;

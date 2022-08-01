@@ -83,8 +83,13 @@ ngx_bbr_init(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     bbr->full_bandwidth_cnt = 0;
     bbr->full_bandwidth_reached = FALSE;
 
+
+    init_Loss_Filter(&bbr->loss_filter);
     ngx_bbr_enter_startup(bbr);
     ngx_bbr_init_pacing_rate(bbr, sampler);
+
+    bbr->send_rtt = 0;
+    bbr->resend_rtt = 0;
 }
 
 static uint32_t 
@@ -113,6 +118,13 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
         bbr->round_cnt++;
         bbr->round_start = TRUE;
         bbr->packet_conservation = 0;
+
+        if (bbr->send_rtt != 0) {
+            float loss_rtt = bbr->resend_rtt * 1.0 / bbr->send_rtt;
+            insertLoss(&bbr->loss_filter, loss_rtt);
+            bbr->send_rtt = 0;
+            bbr->resend_rtt = 0;
+        }
     }
     /* FIXED: It may reduce the est. bw due to network instability. */
     /*  if (sampler->lagest_ack_time > bbr->last_round_trip_time) {
@@ -122,6 +134,10 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     uint32_t bandwidth;
     /* Calculate the new bandwidth, bytes per second */
     bandwidth = 1.0 * sampler->delivered / sampler->interval * MSEC2SEC;
+
+    // if (sampler->is_app_limited) {
+    //     printf("app_limited\n");
+    // }
 
     if (!sampler->is_app_limited || bandwidth >= ngx_bbr_max_bw(bbr)) {
         ngx_win_filter_max(&bbr->bandwidth, ngx_bbr_bw_win_size, 
@@ -233,7 +249,7 @@ ngx_bbr_check_drain(ngx_bbr_t *bbr, ngx_sample_t *sampler)
         ngx_bbr_enter_drain(bbr);
     }
     if (bbr->mode == BBR_DRAIN 
-        && sampler->bytes_inflight <= ngx_bbr_target_cwnd(bbr, 1.0)) {
+        && sampler->in_filght <= ngx_bbr_target_cwnd(bbr, 1.0)) {
         ngx_bbr_enter_probe_bw(bbr, sampler);
     }
         
@@ -288,7 +304,7 @@ ngx_bbr_check_probe_rtt_done(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     bbr->min_rtt_stamp = sampler->now;
     ngx_bbr_restore_cwnd(bbr);
     ngx_bbr_exit_probe_rtt(bbr, sampler);
-    printf("Exit probe_RTT: %ld\n", ngx_current_msec);
+    //printf("Exit probe_RTT: %ld\n", ngx_current_msec);
 }
 
 static uint32_t 
@@ -310,7 +326,7 @@ ngx_bbr_update_min_rtt(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
     if (min_rtt_expired && bbr->mode != BBR_PROBE_RTT 
         && !bbr->idle_restart)
     {   
-        printf("Enter probe_RTT: %ld\n", ngx_current_msec);
+        //printf("Enter probe_RTT: %ld\n", ngx_current_msec);
         ngx_bbr_enter_probe_rtt(bbr);
         ngx_bbr_save_cwnd(bbr);
         bbr->probe_rtt_round_done_stamp = 0;
@@ -322,7 +338,7 @@ ngx_bbr_update_min_rtt(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
             + cg->in_flight)? (cg->delivered
                 + cg->in_flight) : 1;
         if (!bbr->probe_rtt_round_done_stamp 
-            && (sampler->bytes_inflight <= ngx_bbr_probe_rtt_cwnd(bbr)))
+            && (sampler->in_filght <= ngx_bbr_probe_rtt_cwnd(bbr)))
         {
             bbr->probe_rtt_round_done_stamp = sampler->now + 
                                               ngx_min(2*sampler->srtt, 
@@ -364,6 +380,26 @@ ngx_bbr_set_pacing_rate(ngx_bbr_t *bbr, ngx_sample_t *sampler)
         ngx_bbr_init_pacing_rate(bbr, sampler);
     }
     _ngx_bbr_set_pacing_rate_helper(bbr, bbr->pacing_gain);
+
+
+    if (bbr->mode == BBR_PROBE_BW && bbr->pacing_gain == 1) {
+        //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
+
+        float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
+        if (bbr->loss_filter.loss_now > 0.1) {
+            f = 0;
+        }
+        bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
+    }
+    extern int buffer;
+    if (size <= 0 || buffer == 0) {
+        return;
+    }
+    u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
+    //printf("%d, %d, %ld\n", size, buffer, min_rate);
+    bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
+    bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->bw * bbr->pacing_gain);
+
     if (bbr->pacing_rate == 0) {
         ngx_bbr_init_pacing_rate(bbr, sampler);
     }
@@ -511,6 +547,7 @@ ngx_bbr_on_ack(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
 void 
 ngx_bbr_restart_from_idle(ngx_bbr_t *bbr, uint64_t conn_delivered)
 {
+    //printf("restart_from_idle\n");
     uint64_t now = ngx_current_msec;
     bbr->idle_restart = 1;
     ngx_sample_t sampler = {.now = now, .total_acked = conn_delivered};

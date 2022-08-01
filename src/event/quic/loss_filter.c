@@ -1,6 +1,3 @@
-#include <ngx_config.h>
-#include <ngx_core.h>
-#include <ngx_event.h>
 #include <ngx_event_quic_connection.h>
 
 int cnt1[100];

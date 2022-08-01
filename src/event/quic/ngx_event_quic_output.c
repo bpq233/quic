@@ -142,61 +142,71 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
     cg = &qc->congestion;
     path = qc->path;
 
-    size_t length = 0, max_len = cg->bbrs.pacing_rate /1000 * 5 - cg->bbr.len;
-    if (USE_BBR) {
-        // if (cg->bbr.mode == PROBE_RTT) {
-        //     if (cg->bbr.probe_rtt_done_stamp != 0 && ngx_current_msec > cg->bbr.probe_rtt_done_stamp + cg->bbr.RTprop) {
-        //         cg->bbr.rtprop_stamp = ngx_current_msec;
-        //         BBRRestoreCwnd(&cg->bbr);
-        //         cg->window = cg->bbr.cwnd;
-        //         if (cg->bbr.is_at_full_bandwidth_) {
-        //             BBREnterProbeBW(&cg->bbr);
-        //         } else {
-        //             BBREnterStartup(&cg->bbr);
-        //         }
-        //     }
-        // }
+    // size_t length = 0, max_len = cg->bbrs.pacing_rate /1000 * 5 - cg->bbr.len;
+    // if (USE_BBR) {
+    //     // if (cg->bbr.mode == PROBE_RTT) {
+    //     //     if (cg->bbr.probe_rtt_done_stamp != 0 && ngx_current_msec > cg->bbr.probe_rtt_done_stamp + cg->bbr.RTprop) {
+    //     //         cg->bbr.rtprop_stamp = ngx_current_msec;
+    //     //         BBRRestoreCwnd(&cg->bbr);
+    //     //         cg->window = cg->bbr.cwnd;
+    //     //         if (cg->bbr.is_at_full_bandwidth_) {
+    //     //             BBREnterProbeBW(&cg->bbr);
+    //     //         } else {
+    //     //             BBREnterStartup(&cg->bbr);
+    //     //         }
+    //     //     }
+    //     // }
 
-        if (ngx_current_msec >= cg->timer) {
-            cg->timer = ngx_current_msec + 5;
-            ngx_add_timer(&qc->push, 5);
-        } else {
-            return NGX_OK;
-        }   
-    }
-    if (ngx_current_msec > cg->bbr.timer) {
+    //     if (ngx_current_msec >= cg->timer) {
+    //         cg->timer = ngx_current_msec + 5;
+    //         ngx_add_timer(&qc->push, 5);
+    //     } else {
+    //         return NGX_OK;
+    //     }   
+    // }
+    if (ngx_current_msec > cg->timer) {
         //extern int size;
         //printf("time: %lds 1s内: resend: %ld send: %ld ------%.2f 总: resend: %ld send: %ld ------%.2f BtlBW %ld\n", (ngx_current_msec - cg->bbr.start_time) / 1000, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / (cg->bbr.send_s - cg->bbr.resend_s), cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / (cg->bbr.sum - cg->bbr.resend), cg->bbr.BtlBw);
-        printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%d,%ld,%ld,%ld\n",ngx_current_msec - cg->bbr.start_time, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / cg->bbr.send_s, cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / cg->bbr.sum, cg->bbrs.bw, cg->bbrs.min_rtt, cg->window, cg->in_flight);
+        printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%d,%ld,%ld,%ld\n",ngx_current_msec - cg->start_time, cg->resend_s, cg->send_s, cg->resend_s * 100.0 / ngx_max(cg->send_s,1), cg->resend, cg->send, cg->resend * 100.0 / ngx_max(cg->send,1), cg->bbr.bw, cg->bbr.min_rtt, cg->window, cg->in_flight);
         
-        if (ngx_current_msec - cg->bbr.start_time > 633000) {
-            // extern int cnt1[100];
-            // int sumc = 0, cc = 0;
-            // for (int i = 0; i < 100; i++) {
-            //     sumc += cnt1[i];
-            // }
-            // for (int i = 0; i < 100; i++) {
-            //     cc += cnt1[i];
-            //     printf("%.2f,", cc * 1.0 / sumc);
-            // }
-            // printf("\n");
+        // if (ngx_current_msec - cg->bbr.start_time > 633000) {
+        //     // extern int cnt1[100];
+        //     // int sumc = 0, cc = 0;
+        //     // for (int i = 0; i < 100; i++) {
+        //     //     sumc += cnt1[i];
+        //     // }
+        //     // for (int i = 0; i < 100; i++) {
+        //     //     cc += cnt1[i];
+        //     //     printf("%.2f,", cc * 1.0 / sumc);
+        //     // }
+        //     // printf("\n");
 
-            int sum = 0;
-            for (int i = 0; i <= 100; i++) {
-                sum += cg->bbr.loss[i];
-                printf("%.2f,", sum * 1.0 / cg->bbr.sum);
-            }
-            printf("\n");
-        }
+        //     int sum = 0;
+        //     for (int i = 0; i <= 100; i++) {
+        //         sum += cg->bbr.loss[i];
+        //         printf("%.2f,", sum * 1.0 / cg->bbr.sum);
+        //     }
+        //     printf("\n");
+        // }
 
-        cg->bbr.timer = ngx_current_msec + 1000;
-        cg->bbr.send_s = 0;
-        cg->bbr.resend_s = 0;
+        cg->timer = ngx_current_msec + 1000;
+        cg->send_s = 0;
+        cg->resend_s = 0;
         fflush(stdout);
     }
 
-    while (cg->in_flight < cg->window) {
+    if (cg->in_flight == 0 && cg->sampler.is_app_limited) {
+        ngx_bbr_restart_from_idle(&cg->bbr, cg->delivered);
+    }
 
+    ngx_pacing_on_timeout(&cg->pacing, c);
+
+    
+    while (cg->in_flight < cg->window || ngx_current_msec - cg->cwnd_limit_timer > 1000) {
+        cg->cwnd_limit_timer = ngx_current_msec;
+        if (!ngx_pacing_can_write(&cg->pacing, 1252, c)) {
+            break;
+        }
         p = dst;
 
         len = ngx_min(qc->ctp.max_udp_payload_size,
@@ -240,7 +250,9 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
         }
 
         len = p - dst;
-        ngx_sample_check_app_limited(c, len);
+        if (ngx_sample_check_app_limited(c, len)) {
+            ngx_pacing_on_app_limit(&cg->pacing);
+        }
         if (len == 0) {
             break;
         }
@@ -265,16 +277,18 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
         }
 
         path->sent += len;
+        ngx_pacing_on_packet_sent(&cg->pacing, len, c);
 
-        if (USE_BBR) {
-            length += len;
-            if (length >= max_len) { 
-            //printf("send:  %ld %ld\n", ngx_current_msec, length);
-                cg->bbr.len = length - max_len;
-                return NGX_OK; 
-            }
-        }
+        // if (USE_BBR) {
+        //     length += len;
+        //     if (length >= max_len) { 
+        //     //printf("send:  %ld %ld\n", ngx_current_msec, length);
+        //         cg->bbr.len = length - max_len;
+        //         return NGX_OK; 
+        //     }
+        // }
     }
+
     return NGX_OK;
 }
 
@@ -291,10 +305,6 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
 
     cg = &qc->congestion;
 
-    if (cg->in_flight == 0 && cg->sampler.is_app_limited) {
-        ngx_bbr_restart_from_idle(&cg->bbrs, cg->delivered);
-    }
-
     while (!ngx_queue_empty(&ctx->sending)) {
 
         q = ngx_queue_head(&ctx->sending);
@@ -303,12 +313,12 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
         ngx_queue_remove(q);
 
         if (f->pkt_need_ack && !qc->closing) {
-            f->first_sendtime = cg->bbr.first_sendtime;
-            f->sendtime = ngx_current_msec;
-            f->delivered = cg->bbr.delivered;
-            if (cg->in_flight * 2 < cg->window) {
-                f->is_app_limit = true;
-            }
+            // f->first_sendtime = cg->bbr.first_sendtime;
+            // f->sendtime = ngx_current_msec;
+            // f->delivered = cg->bbr.delivered;
+            // if (cg->in_flight * 2 < cg->window) {
+            //     f->is_app_limit = true;
+            // }
 
             ngx_sample_on_sent(f, c);
 
@@ -317,19 +327,17 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
             cg->in_flight += f->plen;
 
             cg->bbr.send_rtt += f->plen;
-            cg->bbr.sum += f->plen;
-            cg->bbr.send_s += f->plen;
-            if (cg->bbr.send_s != 0) {
-                cg->bbr.loss[(int)(cg->bbr.resend_s * 100.0 / cg->bbr.send_s)] += f->plen;
+            cg->send += f->plen;
+            cg->send_s += f->plen;
+            if (cg->send_s != 0) {
+                cg->bbr.loss[(int)(cg->resend_s * 100.0 / cg->send_s)] += f->plen;
             }
 
             extern int size;
             if (f->is_resend) {
-                cg->bbr.resend += f->plen;
-                cg->bbr.resend_s += f->plen;
-
+                cg->resend += f->plen;
+                cg->resend_s += f->plen;
                 cg->bbr.resend_rtt += f->plen;
-                cg->bbr.is_send+=f->plen;
             } else {
                 if (size > (int)f->plen) {
                     size-=f->plen;

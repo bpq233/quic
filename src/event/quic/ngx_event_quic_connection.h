@@ -38,14 +38,18 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <ngx_event_quic_socket.h>
 #include <ngx_sample.h>
 #include <ngx_window_filter.h>
+#include <ngx_pacing.h>
+#include <ngx_bbr.h>
 #include <bbr.h>
 #include <cubic.h>
-#include <ngx_bbr.h>
+#include <loss_filter.h>
 
 #define USE_BBR_S               0
 #define USE_BBR                 1
 #define USE_CUBIC               0
 #define MIN_CND                 1460 * 20
+
+#define NGX_QUIC_MSS 1500
 /* RFC 9002, 6.2.2.  Handshakes and New Paths: kInitialRtt */
 #define NGX_QUIC_INITIAL_RTT                 333 /* ms */
 
@@ -156,18 +160,28 @@ typedef struct {
     ngx_msec_t                        recovery_start;
 
     ngx_msec_t                        timer;
-    BBR                               bbr;
+    BBR                               bbrs;
     Cubic                             cubic;
     
-    ngx_bbr_t                         bbrs;
+    ngx_pacing_t                      pacing;
+    ngx_bbr_t                         bbr;
     ngx_sample_t                      sampler;
     uint32_t                          app_limited;
     uint32_t                          delivered;
     uint32_t                          prior_delivered;
     uint32_t                          lost_pkts_number;
-    size_t                            prior_bytes_in_flight;
+    size_t                            prior_in_flight;
     ngx_msec_t                        delivered_time;
     ngx_msec_t                        first_sent_time;
+    ngx_msec_t                        cwnd_limit_timer;
+
+
+    //统计
+    uint64_t  send;
+    uint64_t  send_s;
+    uint64_t  resend;
+    uint64_t  resend_s;
+    ngx_msec_t start_time;
 } ngx_quic_congestion_t;
 
 
