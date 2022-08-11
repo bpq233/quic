@@ -64,6 +64,8 @@ ngx_quic_lost_threshold(ngx_quic_connection_t *qc)
 }
 
 
+size_t rtt_, cnt_up;
+
 ngx_int_t
 ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
     ngx_quic_frame_t *f)
@@ -195,6 +197,9 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
     }
     cg->sampler.prior_time = 0;
     cg->window = cg->bbr.congestion_window;
+    // if (cg->bbr.mode==BBR_PROBE_BW)
+    // printf("%ld,%.2f,%.2f,%ld,%ld,%d\n", ngx_current_msec - cg->start_time, cg->resend_s * 100.0 / ngx_max(cg->send_s,1),cg->resend * 100.0 / ngx_max(cg->send,1), qc->latest_rtt,cg->in_flight,cg->bbr.bw);
+    cg->bbr.rtt[ngx_min(qc->latest_rtt, 1050)]++;
 
     return result;
 }

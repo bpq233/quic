@@ -26,6 +26,13 @@ typedef enum {
     BBR_IN_RECOVERY,
 } ngx_bbr_recovery_mode;
 
+typedef enum {
+    BBR_NOT_IN_CC=0,
+    BBR_PROBE_CC,
+    BBR_IN_CC,
+    BBR_RECOVERY_CC,
+} ngx_bbr_cc_mode;
+
 typedef struct ngx_bbr_s {
     /* Current mode */
     ngx_bbr_mode           mode;
@@ -110,10 +117,18 @@ typedef struct ngx_bbr_s {
     uint64_t  resend_rtt;
     Loss_Filter loss_filter;
     int loss[110];
+    int rtt[1100];
 
+    ngx_bbr_cc_mode        cc_mode;
+    ngx_msec_t             cc_start_time;
+    ngx_msec_t             probe_rtt;
+    ngx_msec_t             cc_rtt;
+    uint64_t               bw_down_cnt;
+    uint32_t               max_down;
 } ngx_bbr_t;
 
 void 
 ngx_bbr_init(ngx_bbr_t *bbr, ngx_sample_t *sampler);
+
 
 #endif

@@ -1,6 +1,9 @@
 #include <ngx_window_filter.h>
 #include <ngx_event_quic_connection.h>
 
+#define USE_CC 1
+#define USE_LOSS_FILTER 0
+
 #define NGX_BBR_MAX_DATAGRAMSIZE    1500
 #define NGX_BBR_MIN_WINDOW          (4 * NGX_BBR_MAX_DATAGRAMSIZE)
 #define NGX_BBR_MAX_WINDOW          (100 * NGX_BBR_MAX_DATAGRAMSIZE)
@@ -84,7 +87,9 @@ ngx_bbr_init(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     bbr->full_bandwidth_reached = FALSE;
 
 
-    init_Loss_Filter(&bbr->loss_filter);
+    if (USE_LOSS_FILTER) {
+        init_Loss_Filter(&bbr->loss_filter);
+    }
     ngx_bbr_enter_startup(bbr);
     ngx_bbr_init_pacing_rate(bbr, sampler);
 
@@ -119,11 +124,13 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
         bbr->round_start = TRUE;
         bbr->packet_conservation = 0;
 
-        if (bbr->send_rtt != 0) {
-            float loss_rtt = bbr->resend_rtt * 1.0 / bbr->send_rtt;
-            insertLoss(&bbr->loss_filter, loss_rtt);
-            bbr->send_rtt = 0;
-            bbr->resend_rtt = 0;
+        if (USE_LOSS_FILTER) {
+            if (bbr->send_rtt != 0) {
+                float loss_rtt = bbr->resend_rtt * 1.0 / bbr->send_rtt;
+                insertLoss(&bbr->loss_filter, loss_rtt);
+                bbr->send_rtt = 0;
+                bbr->resend_rtt = 0;
+            }
         }
     }
     /* FIXED: It may reduce the est. bw due to network instability. */
@@ -134,10 +141,21 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     uint32_t bandwidth;
     /* Calculate the new bandwidth, bytes per second */
     bandwidth = 1.0 * sampler->delivered / sampler->interval * MSEC2SEC;
+    // if (!sampler->is_app_limited && bbr->mode == BBR_PROBE_BW)
+    //     printf("%d,%d\n",bandwidth,bbr->bw);
 
     // if (sampler->is_app_limited) {
     //     printf("app_limited\n");
     // }
+
+    if (!sampler->is_app_limited && bandwidth * 1.25 < bbr->bw) {
+        bbr->bw_down_cnt++;
+        if (bandwidth > bbr->max_down) {
+            bbr->max_down = bandwidth;
+        }
+    } else if (bandwidth * 1.25 >= bbr->bw) {
+        bbr->bw_down_cnt = 0;
+    }
 
     if (!sampler->is_app_limited || bandwidth >= ngx_bbr_max_bw(bbr)) {
         ngx_win_filter_max(&bbr->bandwidth, ngx_bbr_bw_win_size, 
@@ -168,16 +186,36 @@ ngx_bbr_is_next_cycle_phase(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     bool is_full_length = (sampler->now - bbr->last_cycle_start) > bbr->min_rtt;
     uint32_t inflight = sampler->prior_inflight;
     bool should_advance_gain_cycling = is_full_length;
-    if (bbr->pacing_gain > 1.0) {
-        should_advance_gain_cycling = is_full_length 
-            && (sampler->loss 
-                || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain));
+    if (USE_CC) {
+        if (bbr->pacing_gain > 1.0) {
+            should_advance_gain_cycling = (is_full_length || inflight >= ngx_bbr_target_cwnd(bbr, 1.5))
+                && (sampler->loss 
+                    || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain));
+        }
+    } else {
+        if (bbr->pacing_gain > 1.0) {
+            should_advance_gain_cycling = is_full_length
+                && (sampler->loss 
+                    || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain));
+        }
     }
+    // if (bbr->pacing_gain > 1.0) {
+    //     should_advance_gain_cycling = is_full_length 
+    //             || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain);
+    // }
     /* Drain to target: 1xBDP */
-    if (bbr->pacing_gain < 1.0) {
-        should_advance_gain_cycling = is_full_length 
-            || (inflight <= ngx_bbr_target_cwnd(bbr, 1.0));
+    if (USE_CC) {
+        if (bbr->pacing_gain < 1.0) {
+                should_advance_gain_cycling = is_full_length 
+                    && (inflight <= ngx_bbr_target_cwnd(bbr, 1.0));
+            }
+    } else {
+        if (bbr->pacing_gain < 1.0) {
+                should_advance_gain_cycling = is_full_length 
+                    || (inflight <= ngx_bbr_target_cwnd(bbr, 1.0));
+            }
     }
+    
     return should_advance_gain_cycling;
 }
 
@@ -367,6 +405,9 @@ _ngx_bbr_set_pacing_rate_helper(ngx_bbr_t *bbr, float pacing_gain)
 {
     uint32_t bandwidth, rate;
     bandwidth = ngx_bbr_max_bw(bbr);
+    if (pacing_gain == 1 && (bbr->cc_mode == BBR_RECOVERY_CC || bbr->cc_mode == BBR_IN_CC)) {
+        pacing_gain = 0.75;
+    }
     rate = bandwidth * pacing_gain;
     if (bbr->full_bandwidth_reached || rate > bbr->pacing_rate) {
         bbr->pacing_rate = rate;
@@ -382,23 +423,25 @@ ngx_bbr_set_pacing_rate(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     _ngx_bbr_set_pacing_rate_helper(bbr, bbr->pacing_gain);
 
 
-    if (bbr->mode == BBR_PROBE_BW && bbr->pacing_gain == 1) {
-        //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
+    // if (USE_LOSS_FILTER) {
+    //     if (bbr->mode == BBR_PROBE_BW && bbr->pacing_gain == 1) {
+    //         //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
 
-        float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
-        if (bbr->loss_filter.loss_now > 0.1) {
-            f = 0;
-        }
-        bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
-    }
-    extern int buffer;
-    if (size <= 0 || buffer == 0) {
-        return;
-    }
-    u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
-    //printf("%d, %d, %ld\n", size, buffer, min_rate);
-    bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
-    bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->bw * bbr->pacing_gain);
+    //         float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
+    //         if (bbr->loss_filter.loss_now > 0.1) {
+    //             f = 0;
+    //         }
+    //         bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
+    //     }
+    //     extern int buffer;
+    //     if (size <= 0 || buffer == 0) {
+    //         return;
+    //     }
+    //     u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
+    //     //printf("%d, %d, %ld\n", size, buffer, min_rate);
+    //     bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
+    //     bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->bw * bbr->pacing_gain);
+    // }
 
     if (bbr->pacing_rate == 0) {
         ngx_bbr_init_pacing_rate(bbr, sampler);
@@ -528,6 +571,52 @@ ngx_bbr_update_recovery_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     }
 }
 
+void
+ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
+{
+    if (ngx_current_msec - bbr->cc_start_time > bbr->min_rtt * 6 && bbr->cc_mode == BBR_PROBE_CC) {
+        bbr->cc_mode = BBR_NOT_IN_CC;
+        bbr->probe_rtt = 0;
+        bbr->cc_rtt = 0;
+    }
+    if (bbr->cc_mode == BBR_NOT_IN_CC
+        && sampler->srtt >= bbr->min_rtt * 1.25)
+    {
+        //printf("probe %ld\n", bbr->probe_rtt);
+        bbr->cc_mode = BBR_PROBE_CC;
+        bbr->probe_rtt = sampler->srtt;
+        bbr->cc_start_time = ngx_current_msec;
+    } 
+    else if (bbr->cc_mode == BBR_PROBE_CC
+             && sampler->srtt >= bbr->probe_rtt * 1.15)
+    {
+        bbr->cc_mode = BBR_IN_CC;
+        bbr->cc_rtt = sampler->srtt;
+        bbr->cc_start_time = ngx_current_msec;
+    }
+    else if (bbr->cc_mode == BBR_IN_CC)
+    {
+        //printf("%ld\n",bbr->cc_rtt);
+        if (sampler->srtt >= bbr->cc_rtt * 1.25) {
+            bbr->cc_mode = BBR_RECOVERY_CC;
+        }
+        if (cg->in_flight <= ngx_bbr_target_cwnd(bbr, 1.0)) {
+            bbr->cc_mode = BBR_NOT_IN_CC;
+        }
+    }
+    else if (bbr->cc_mode == BBR_RECOVERY_CC)
+    {
+        if (bbr->bw_down_cnt >= 50) {
+            ngx_win_filter_reset(&bbr->bandwidth, bbr->round_cnt, bbr->max_down);
+            bbr->bw_down_cnt = 0;
+            bbr->max_down = 0;
+        }
+        if (cg->in_flight <= ngx_bbr_target_cwnd(bbr, 1.0)) {
+            bbr->cc_mode = BBR_NOT_IN_CC;
+        }
+    }
+}
+
 void 
 ngx_bbr_on_ack(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
 {
@@ -539,6 +628,9 @@ ngx_bbr_on_ack(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
     ngx_bbr_update_min_rtt(bbr, sampler, cg);
 
     ngx_bbr_update_recovery_mode(bbr, sampler);
+    if (USE_CC) {
+        ngx_bbr_update_cc_mode(bbr,sampler, cg);
+    }
     /* Update control parameter */
     ngx_bbr_set_pacing_rate(bbr, sampler);
     ngx_bbr_set_cwnd(bbr, sampler, cg);
