@@ -167,7 +167,7 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
     if (ngx_current_msec > cg->timer) {
         //extern int size;
         //printf("time: %lds 1s内: resend: %ld send: %ld ------%.2f 总: resend: %ld send: %ld ------%.2f BtlBW %ld\n", (ngx_current_msec - cg->bbr.start_time) / 1000, cg->bbr.resend_s, cg->bbr.send_s, cg->bbr.resend_s * 100.0 / (cg->bbr.send_s - cg->bbr.resend_s), cg->bbr.resend, cg->bbr.sum, cg->bbr.resend * 100.0 / (cg->bbr.sum - cg->bbr.resend), cg->bbr.BtlBw);
-        printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%d,%ld,%ld,%ld\n",ngx_current_msec - cg->start_time, cg->resend_s, cg->send_s, cg->resend_s * 100.0 / ngx_max(cg->send_s,1), cg->resend, cg->send, cg->resend * 100.0 / ngx_max(cg->send,1), cg->bbr.bw, cg->bbr.min_rtt, cg->window, cg->in_flight);
+        //printf("%ld,%ld,%ld,%.2f,%ld,%ld,%.2f,%d,%ld,%ld,%ld\n",ngx_current_msec - cg->start_time, cg->resend_s, cg->send_s, cg->resend_s * 100.0 / ngx_max(cg->send_s,1), cg->resend, cg->send, cg->resend * 100.0 / ngx_max(cg->send,1), cg->bbr.bw, cg->bbr.min_rtt, cg->window, cg->in_flight);
         if (ngx_current_msec - cg->start_time > 633000) {
             // extern int cnt1[100];
             // int sumc = 0, cc = 0;

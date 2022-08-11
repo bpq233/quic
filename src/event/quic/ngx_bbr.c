@@ -188,9 +188,9 @@ ngx_bbr_is_next_cycle_phase(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     bool should_advance_gain_cycling = is_full_length;
     if (USE_CC) {
         if (bbr->pacing_gain > 1.0) {
-            should_advance_gain_cycling = (is_full_length || inflight >= ngx_bbr_target_cwnd(bbr, 1.5))
+            should_advance_gain_cycling = (is_full_length
                 && (sampler->loss 
-                    || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain));
+                    || inflight >= ngx_bbr_target_cwnd(bbr, bbr->pacing_gain))) || bbr->cc_mode == BBR_IN_CC || bbr->cc_mode == BBR_RECOVERY_CC;
         }
     } else {
         if (bbr->pacing_gain > 1.0) {
@@ -206,8 +206,7 @@ ngx_bbr_is_next_cycle_phase(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     /* Drain to target: 1xBDP */
     if (USE_CC) {
         if (bbr->pacing_gain < 1.0) {
-                should_advance_gain_cycling = is_full_length 
-                    && (inflight <= ngx_bbr_target_cwnd(bbr, 1.0));
+                should_advance_gain_cycling = (inflight <= ngx_bbr_target_cwnd(bbr, 1.0));
             }
     } else {
         if (bbr->pacing_gain < 1.0) {
@@ -405,7 +404,7 @@ _ngx_bbr_set_pacing_rate_helper(ngx_bbr_t *bbr, float pacing_gain)
 {
     uint32_t bandwidth, rate;
     bandwidth = ngx_bbr_max_bw(bbr);
-    if (pacing_gain == 1 && (bbr->cc_mode == BBR_RECOVERY_CC || bbr->cc_mode == BBR_IN_CC)) {
+    if (bbr->cc_mode == BBR_RECOVERY_CC || bbr->cc_mode == BBR_IN_CC) {
         pacing_gain = 0.75;
     }
     rate = bandwidth * pacing_gain;
@@ -574,13 +573,13 @@ ngx_bbr_update_recovery_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler)
 void
 ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
 {
-    if (ngx_current_msec - bbr->cc_start_time > bbr->min_rtt * 6 && bbr->cc_mode == BBR_PROBE_CC) {
+    if (ngx_current_msec - bbr->cc_start_time > bbr->min_rtt * 8 && bbr->cc_mode == BBR_PROBE_CC) {
         bbr->cc_mode = BBR_NOT_IN_CC;
         bbr->probe_rtt = 0;
         bbr->cc_rtt = 0;
     }
     if (bbr->cc_mode == BBR_NOT_IN_CC
-        && sampler->srtt >= bbr->min_rtt * 1.25)
+        && sampler->srtt >= bbr->min_rtt * 1.25 && cg->in_flight >= ngx_bbr_target_cwnd(bbr, 1.25))
     {
         //printf("probe %ld\n", bbr->probe_rtt);
         bbr->cc_mode = BBR_PROBE_CC;
