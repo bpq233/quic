@@ -44,7 +44,6 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <cubic.h>
 #include <loss_filter.h>
 
-#define USE_BBR_S               0
 #define USE_BBR                 1
 #define USE_CUBIC               0
 #define MIN_CND                 1460 * 20

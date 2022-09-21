@@ -1,7 +1,8 @@
 #include <ngx_window_filter.h>
 #include <ngx_event_quic_connection.h>
 
-#define USE_CC 1
+#define USE_CC 0
+#define USE_BBR_S               0
 #define USE_LOSS_FILTER 0
 
 #define NGX_BBR_MAX_DATAGRAMSIZE    1500
@@ -37,6 +38,11 @@ const float ngx_bbr_fullbw_thresh = 1.25;
 /* After 3 rounds bandwidth less than (1.25x), estimate the pipe is full */
 const uint32_t ngx_bbr_fullbw_cnt = 3;
 const uint32_t ngx_bbr_probertt_win_size_ms = 10000;
+
+//BBR-S
+ int bw[1010], tot;
+ bool flag;
+ bool st[1010];
 
 
 static void 
@@ -100,6 +106,9 @@ ngx_bbr_init(ngx_bbr_t *bbr, ngx_sample_t *sampler)
 static uint32_t 
 ngx_bbr_max_bw(ngx_bbr_t *bbr)
 {
+    if (USE_BBR_S) {
+        return bbr->bw;
+    }
     bbr->bw = ngx_win_filter_get(&bbr->bandwidth);
     return bbr->bw;
 }
@@ -149,10 +158,8 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     // }
 
     if (!sampler->is_app_limited && bandwidth * 1.25 < bbr->bw) {
+        bbr->max_down[bbr->bw_down_cnt % 30] = bandwidth;
         bbr->bw_down_cnt++;
-        if (bandwidth > bbr->max_down) {
-            bbr->max_down = bandwidth;
-        }
     } else if (bandwidth * 1.25 >= bbr->bw) {
         bbr->bw_down_cnt = 0;
     }
@@ -160,6 +167,30 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     if (!sampler->is_app_limited || bandwidth >= ngx_bbr_max_bw(bbr)) {
         ngx_win_filter_max(&bbr->bandwidth, ngx_bbr_bw_win_size, 
                            bbr->round_cnt, bandwidth);
+    }
+
+    if (USE_BBR_S) {
+        if (sampler->is_app_limited) return;
+        bw[tot] = bandwidth;
+        tot++;
+        if (tot >= 100) {
+            flag = true;
+            tot = 0;
+        }
+        if (flag) {
+            for (int i = 0; i < 100; i++) st[i] = false;
+            for (int i = 0; i < 15; i++) {
+                int max = 0, c = -1; 
+                for (int i = 0; i < 100; i++) {
+                    if (bw[i] > max && st[i] == false) {
+                        max = bw[i];
+                        c = i;
+                    }
+                }
+                st[c] = true;
+                if (i == 14) bbr->bw = max;
+            }
+        }
     }
 }
 
@@ -587,7 +618,7 @@ ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
         bbr->cc_start_time = ngx_current_msec;
     } 
     else if (bbr->cc_mode == BBR_PROBE_CC
-             && sampler->srtt >= bbr->probe_rtt * 1.15)
+             && sampler->srtt >= bbr->probe_rtt * 1.25)
     {
         bbr->cc_mode = BBR_IN_CC;
         bbr->cc_rtt = sampler->srtt;
@@ -605,10 +636,13 @@ ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
     }
     else if (bbr->cc_mode == BBR_RECOVERY_CC)
     {
-        if (bbr->bw_down_cnt >= 50) {
-            ngx_win_filter_reset(&bbr->bandwidth, bbr->round_cnt, bbr->max_down);
+        if (bbr->bw_down_cnt >= 30) {
+            uint32_t max_down = 0;
+            for (int i = 0; i < 30; i++) {
+                max_down = ngx_max(max_down, bbr->max_down[i]);
+            }
+            ngx_win_filter_reset(&bbr->bandwidth, bbr->round_cnt, max_down);
             bbr->bw_down_cnt = 0;
-            bbr->max_down = 0;
         }
         if (cg->in_flight <= ngx_bbr_target_cwnd(bbr, 1.0)) {
             bbr->cc_mode = BBR_NOT_IN_CC;

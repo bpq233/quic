@@ -124,7 +124,7 @@ typedef struct ngx_bbr_s {
     ngx_msec_t             probe_rtt;
     ngx_msec_t             cc_rtt;
     uint64_t               bw_down_cnt;
-    uint32_t               max_down;
+    uint32_t               max_down[30];
 } ngx_bbr_t;
 
 void 
