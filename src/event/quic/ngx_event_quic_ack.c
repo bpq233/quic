@@ -193,14 +193,16 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
     ngx_int_t result = ngx_quic_detect_lost(c, &send_time);
 
     ngx_quic_congestion_t  *cg = &qc->congestion;
-    if (ngx_generate_sample(c)) {
-        ngx_bbr_on_ack(&cg->bbr, &cg->sampler, cg);//printf("%d %d\n", cg->sampler.delivery_rate, cg->sampler.is_app_limited);
+    if (USE_BBR) {
+        if (ngx_generate_sample(c)) {
+            ngx_bbr_on_ack(&cg->bbr, &cg->sampler, cg);//printf("%d %d\n", cg->sampler.delivery_rate, cg->sampler.is_app_limited);
+        }
+        cg->sampler.prior_time = 0;
+        cg->window = cg->bbr.congestion_window;
+        //if (cg->bbr.mode==BBR_PROBE_BW)
     }
-    cg->sampler.prior_time = 0;
-    cg->window = cg->bbr.congestion_window;
-    //if (cg->bbr.mode==BBR_PROBE_BW)
-    //printf("%ld,%.2f,%.2f,%ld,%ld,%d\n", ngx_current_msec - cg->start_time, cg->resend_s * 100.0 / ngx_max(cg->send_s,1),cg->resend * 100.0 / ngx_max(cg->send,1), qc->latest_rtt,cg->in_flight,cg->bbr.bw);
-    
+
+    printf("%ld,%ld,%.2f,%.2f,%ld,%ld,%d,%ld\n", ngx_current_msec - cg->start_time, cg->resend, cg->resend_s * 100.0 / ngx_max(cg->send_s,1),cg->resend * 100.0 / ngx_max(cg->send,1), qc->latest_rtt,cg->in_flight,cg->bbr.bw, cg->window);
     cg->bbr.rtt[ngx_min(qc->latest_rtt, 1050)]++;
 
     return result;
@@ -368,9 +370,6 @@ ngx_quic_congestion_ack(ngx_connection_t *c, ngx_quic_frame_t *f)
     if (USE_CUBIC) {
         CubicOnAck(&cg->cubic, f->plen, f->sendtime, ngx_current_msec);
         cg->window = cg->cubic.cwnd;
-        if (cg->window < 1460 * 20) {
-            cg->window = 1460 * 20;
-        }
         goto done;
     }
 
@@ -631,9 +630,6 @@ ngx_quic_persistent_congestion(ngx_connection_t *c)
     cg->recovery_start = ngx_current_msec;
 
     cg->window = qc->tp.max_udp_payload_size * 2;
-    if (MIN_CND) {
-        cg->window = MIN_CND;
-    }
 
     ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
                    "quic persistent congestion win:%uz", cg->window);
@@ -811,14 +807,8 @@ ngx_quic_congestion_lost(ngx_connection_t *c, ngx_quic_frame_t *f)
     cg->recovery_start = ngx_current_msec;
     cg->window /= 2;
 
-    if (MIN_CND) {
-        if (cg->window < MIN_CND) {
-            cg->window = MIN_CND;
-        }
-    } else {
-        if (cg->window < qc->tp.max_udp_payload_size * 2) {
-            cg->window = qc->tp.max_udp_payload_size * 2;
-        }
+    if (cg->window < qc->tp.max_udp_payload_size * 2) {
+        cg->window = qc->tp.max_udp_payload_size * 2;
     }
 
     // if (cg->window < qc->tp.max_udp_payload_size * 2) {

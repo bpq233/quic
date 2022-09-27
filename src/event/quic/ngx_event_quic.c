@@ -321,10 +321,6 @@ ngx_quic_new_connection(ngx_connection_t *c, ngx_quic_conf_t *conf,
                                     ngx_max(2 * qc->tp.max_udp_payload_size,
                                             14720));
 
-    if (MIN_CND) {
-        qc->congestion.window = 60000;
-    }
-
     qc->congestion.ssthresh = (size_t) -1;
     qc->congestion.recovery_start = ngx_current_msec;
 

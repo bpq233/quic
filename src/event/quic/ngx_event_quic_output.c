@@ -208,7 +208,7 @@ ngx_quic_create_datagrams(ngx_connection_t *c)
     
     while (cg->in_flight < cg->window || ngx_current_msec - cg->cwnd_limit_timer > 1000) {
         cg->cwnd_limit_timer = ngx_current_msec;
-        if (!ngx_pacing_can_write(&cg->pacing, 1252, c)) {
+        if (USE_BBR && !ngx_pacing_can_write(&cg->pacing, 1252, c)) {
             break;
         }
         p = dst;
@@ -329,6 +329,7 @@ ngx_quic_commit_send(ngx_connection_t *c, ngx_quic_send_ctx_t *ctx)
             // }
 
             ngx_sample_on_sent(f, c);
+            f->sendtime = ngx_current_msec;
 
             ngx_queue_insert_tail(&ctx->sent, q);
 

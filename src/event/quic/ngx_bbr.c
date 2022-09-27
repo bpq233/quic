@@ -1,7 +1,7 @@
 #include <ngx_window_filter.h>
 #include <ngx_event_quic_connection.h>
 
-#define USE_CC 0
+#define USE_CC 1
 #define USE_BBR_S               0
 #define USE_LOSS_FILTER 0
 
@@ -452,26 +452,26 @@ ngx_bbr_set_pacing_rate(ngx_bbr_t *bbr, ngx_sample_t *sampler)
     }
     _ngx_bbr_set_pacing_rate_helper(bbr, bbr->pacing_gain);
 
+    if (USE_LOSS_FILTER) {
+        
+        if (bbr->mode == BBR_PROBE_BW && bbr->pacing_gain == 1) {
+            //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
 
-    // if (USE_LOSS_FILTER) {
-    //     if (bbr->mode == BBR_PROBE_BW && bbr->pacing_gain == 1) {
-    //         //bbr->pacing_rate *= (0.01 * bbr->loss_filter.rank);
-
-    //         float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
-    //         if (bbr->loss_filter.loss_now > 0.1) {
-    //             f = 0;
-    //         }
-    //         bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
-    //     }
-    //     extern int buffer;
-    //     if (size <= 0 || buffer == 0) {
-    //         return;
-    //     }
-    //     u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
-    //     //printf("%d, %d, %ld\n", size, buffer, min_rate);
-    //     bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
-    //     bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->bw * bbr->pacing_gain);
-    // }
+            float f = (1 - 10 * bbr->loss_filter.loss_now) * (1 - 10 * bbr->loss_filter.loss_now);
+            if (bbr->loss_filter.loss_now > 0.1) {
+                f = 0;
+            }
+            bbr->pacing_rate = bbr->pacing_rate * f + bbr->pacing_rate * (1 - f) * (0.01 * bbr->loss_filter.rank);
+        }
+        // extern int buffer;
+        // if (size <= 0 || buffer == 0) {
+        //     return;
+        // }
+        // u_int64_t min_rate = (u_int64_t)(((u_int64_t)(((u_int64_t)(size * 1.0 / buffer)) + 999) * 1.0) / 1000);
+        // //printf("%d, %d, %ld\n", size, buffer, min_rate);
+        // bbr->pacing_rate = mymax(bbr->pacing_rate, min_rate);
+        // bbr->pacing_rate = mymin(bbr->pacing_rate, bbr->bw * bbr->pacing_gain);
+    }
 
     if (bbr->pacing_rate == 0) {
         ngx_bbr_init_pacing_rate(bbr, sampler);

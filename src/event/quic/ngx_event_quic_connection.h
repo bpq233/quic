@@ -44,9 +44,9 @@ typedef struct ngx_quic_keys_s        ngx_quic_keys_t;
 #include <cubic.h>
 #include <loss_filter.h>
 
-#define USE_BBR                 1
-#define USE_CUBIC               0
-#define MIN_CND                 1460 * 20
+#define USE_BBR                 0
+#define USE_CUBIC               1
+
 
 #define NGX_QUIC_MSS 1500
 /* RFC 9002, 6.2.2.  Handshakes and New Paths: kInitialRtt */
