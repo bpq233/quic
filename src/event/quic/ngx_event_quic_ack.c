@@ -204,6 +204,16 @@ ngx_quic_handle_ack_frame(ngx_connection_t *c, ngx_quic_header_t *pkt,
 
     //printf("%ld,%ld,%.2f,%.2f,%ld,%ld,%d,%ld\n", ngx_current_msec - cg->start_time, cg->resend, cg->resend_s * 100.0 / ngx_max(cg->send_s,1),cg->resend * 100.0 / ngx_max(cg->send,1), qc->latest_rtt,cg->in_flight,cg->bbr.bw, cg->window);
     cg->bbr.rtt[ngx_min(qc->latest_rtt, 1050)]++;
+    
+    cg->bbr._rtt_[cg->bbr.idx++] = qc->latest_rtt;
+    if (cg->bbr.idx == 10000) {
+        FILE *fp = fopen("/home/bpq/data/rtt", "a");
+        for (int i = 0; i < cg->bbr.idx; i += 100) {
+            fprintf(fp, "%d\n", cg->bbr._rtt_[i]);
+        }
+        fclose(fp);
+        cg->bbr.idx = 0;
+    }
 
     return result;
 }

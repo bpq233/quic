@@ -1,9 +1,11 @@
 #include <ngx_window_filter.h>
 #include <ngx_event_quic_connection.h>
 
-#define USE_CC 0
+#define USE_CC 1
 #define USE_BBR_S               0
 #define USE_LOSS_FILTER 0
+
+#define BBR_MODE 4
 
 #define NGX_BBR_MAX_DATAGRAMSIZE    1500
 #define NGX_BBR_MIN_WINDOW          (4 * NGX_BBR_MAX_DATAGRAMSIZE)
@@ -126,7 +128,7 @@ ngx_bbr_max_bw(ngx_bbr_t *bbr)
 }
 
 static void 
-ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
+ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
 {
     bbr->round_start = FALSE;
     /* Check whether the data is legal */
@@ -190,14 +192,18 @@ ngx_bbr_update_bandwidth(ngx_bbr_t *bbr, ngx_sample_t *sampler)
         bbr->max_down[bbr->bw_down_cnt % 30] = bandwidth;
         bbr->bw_down_cnt++;
     } 
-    //else if (bandwidth * 1.33 >= bbr->bw) {
-    //     bbr->bw_down_cnt = 0;
-    // }
+    else if (bandwidth * 1.33 >= bbr->bw) {
+        bbr->bw_down_cnt = 0;
+    }
 
     if (!sampler->is_app_limited || bandwidth >= ngx_bbr_max_bw(bbr)) {
         ngx_win_filter_max(&bbr->bandwidth, ngx_bbr_bw_win_size, 
                            bbr->round_cnt, bandwidth);
     }
+
+    // if (!sampler->is_app_limited && bbr->mode == BBR_PROBE_BW) {
+    //     printf("%ld,%d,%.5f,%ld,%.5f,%ld\n",ngx_current_msec - cg->start_time, bandwidth * 8, bandwidth * 1.0 / ngx_bbr_max_bw(bbr), sampler->rtt,sampler->rtt * 1.0 / bbr->min_rtt,cg->window);
+    // }
 
     if (USE_BBR_S) {
         if (sampler->is_app_limited) return;
@@ -649,10 +655,10 @@ ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
     }
 
     if (bbr->mode == BBR_PROBE_BW) {
-        if (c_cwnd) {
-            bbr->cwnd_gain = 2;
-            return;
-        }
+        // if (c_cwnd) {
+        //     bbr->cwnd_gain = 2;
+        //     return;
+        // }
         if (sampler->loss) {
             bbr->cwnd_gain = ngx_min(sampler->rtt * 1.0 / bbr->min_rtt, 2.0);
         } else {
@@ -660,7 +666,7 @@ ngx_bbr_update_cc_mode(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestio
         }
     }
 
-    if (sampler->rtt > 2 * bbr->min_rtt && sampler->loss) {
+    if (sampler->rtt > 2.5 * bbr->min_rtt && bbr->bw_down_cnt >= 30 && sampler->loss) {
         uint32_t max_down = 0;
         for (int i = 0; i < 30; i++) {
             max_down = ngx_max(max_down, bbr->max_down[i]);
@@ -739,7 +745,10 @@ void
 ngx_bbr_on_ack(ngx_bbr_t *bbr, ngx_sample_t *sampler, ngx_quic_congestion_t *cg)
 {
     /* Update model and state */
-    ngx_bbr_update_bandwidth(bbr, sampler);
+    // if (sampler->loss) {
+    //     printf("%ld\n", sampler->rtt);
+    // }
+    ngx_bbr_update_bandwidth(bbr, sampler,cg);
     ngx_bbr_update_cycle_phase(bbr, sampler);
     ngx_bbr_check_full_bw_reached(bbr, sampler);
     ngx_bbr_check_drain(bbr, sampler);
